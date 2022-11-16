@@ -152,3 +152,56 @@ MASKS:
     .word mask2
     .word mask3
     .word mask4
+
+
+; BEGIN:procedure_name
+procedure_name:
+    ; your implementation code
+    ret
+; END:procedure_name
+
+; BEGIN:clear_leds
+clear_leds:
+    stw zero, LEDS(zero)
+    stw zero, LEDS+4(zero)
+    stw zero, LEDS+8(zero)
+    ret
+; END:clear_leds
+
+; BEGIN:set_pixel
+set_pixel:
+    ldw t0, 0(a0)           ; x-pos
+    ldw t1, 0(a1)           ; y-pos
+    add t1, t1, t1
+    add t1, t1, t1          ; y*4
+
+    addi t2, zero, LEDS     ; led array address
+    addi t3, zero, 4        ; modulo
+    jmpi loop_cond
+
+    loop:                   ; to choose the right led array
+        sub t0, t0, 4
+        addi t2, t2, 4
+    loop_cond:
+        bgeu t0, t3, loop
+
+    ldw t4, (t2)            ; load the led array
+    add t6, t0, t1          ; pos = x + y*4
+
+    addi t5, zero, 1
+    sll t5, t5, t6          ; shift '1' at the right place
+    or t7, t4, t5           ; turn on the led
+    stw t7, (t2)            ; store in the RAM memory
+
+    ret
+; END:set_pixel
+
+; BEGIN:wait
+wait: 
+    addi t0, zero, 0x80000  ; initial counter of 2e19
+    loop:
+        ldw t1, SPEED(zero) ; decrement of the counter depends on the game speed
+        sub t0, t0, t1
+        bne t0, zero, loop
+    ret
+; END:wait
