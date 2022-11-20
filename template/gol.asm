@@ -202,6 +202,7 @@ wait:
     ret
 ; END:wait
 
+; --------------------------------------------- JEREMY
 ; BEGIN:get_gsa
 get_gsa:
     ldw t0, GSA_ID(zero)
@@ -268,3 +269,38 @@ draw_gsa_id0:
     ret
 ; END:draw_gsa_id0
 
+; --------------------------------------------- SEB
+;; BEGIN:wait
+;wait: 
+;    addi t0, zero, 0x80000
+;    loop:
+;        addi t0, t0, -1
+;        bne t0, zero, loop
+;    ret
+;; END:wait
+
+
+; BEGIN:get_gsa
+get_gsa:
+    ldw t0, 0(GSA_ID)
+    bne t0, zero, gamesa1_1
+    ldw v0, GSA0(a0)
+    jmp end
+    gamesa1:
+        ldw v0, GSA1(a0)
+    end:
+    ret v0
+; END:get_gsa
+
+; BEGIN:set_gsa
+set_gsa:
+    ldw t0, 0(GSA_ID)
+    bne t0, zero, gamesa1_2
+    stw a0, GSA0(a1)
+    jmp end
+    gamesa1_2:
+        stw a0, GSA1(a1)
+    end:
+    
+    ret
+; END:set_gsa
