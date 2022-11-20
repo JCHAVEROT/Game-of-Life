@@ -177,17 +177,17 @@ set_pixel:
     addi t2, zero, LEDS     ; led array address
     addi t3, zero, 4        ; modulo
     jmpi loop1_cond
-    loop1:                   ; to choose the right led array
+    loop1:                  ; to choose the right led array
         sub t0, t0, t3
         add t2, t2, t3
     loop1_cond:
         bgeu t0, t3, loop1
-    ldw t4, (t2)            ; load the led array
+    ldw t4, 0(t2)           ; load the led array
     add t6, t0, t1          ; pos = x + y*4
     addi t5, zero, 1
     sll t5, t5, t6          ; shift '1' at the right place
     or t7, t4, t5           ; turn on the led
-    stw t7, (t2)            ; store in the RAM memory
+    stw t7, 0(t2)           ; store in the RAM memory
     ret
 ; END:set_pixel
 
@@ -201,3 +201,70 @@ wait:
         bne t0, zero, loop2
     ret
 ; END:wait
+
+; BEGIN:get_gsa
+get_gsa:
+    ldw t0, GSA_ID(zero)
+    beq t0, zero, get_gsa_id0
+    ldw t3, 0(a0)
+    add t3, t3, t3
+    add t3, t3, t3      ; t3 * 4 to have a valid address
+    addi t4, t4, GSA1
+    ldw v0, 0(t4)
+    ret
+; END:get_gsa
+
+; BEGIN:get_gsa_id0
+get_gsa_id0:
+    ldw t3, 0(a0)
+    add t3, t3, t3
+    add t3, t3, t3      ; t3 * 4 to have a valid address
+    addi t4, t4, GSA0
+    ldw v0, 0(t4)
+    ret
+; END:get_gsa_id0
+
+; BEGIN:set_gsa
+set_gsa:
+    ldw t0, GSA_ID(zero)
+    beq t0, zero, set_gsa_id0
+    ldw t3, 0(a0)
+    add t3, t3, t3
+    add t3, t3, t3      ; t3 * 4 to have a valid address
+    addi t4, t4, GSA1
+    stw t4, 0(ao)
+    ret
+; END:set_gsa
+
+; BEGIN:set_gsa_id0
+set_gsa_id0:
+    ldw t3, 0(a0)
+    add t3, t3, t3
+    add t3, t3, t3      ; t3 * 4 to have a valid address
+    addi t4, t4, GSA0
+    stw t4, 0(ao)
+    ret
+; END:set_gsa_id0
+
+; BEGIN:draw_gsa
+draw_gsa:
+    ldw t0, GSA_ID(zero)
+    beq t0, zero, draw_gsa_id0
+    ldw t3, 0(a0)
+    add t3, t3, t3
+    add t3, t3, t3      ; t3 * 4 to have a valid address
+    addi t4, t4, GSA1
+    stw t4, 0(ao)
+    ret
+; END:draw_gsa
+
+; BEGIN:draw_gsa_id0
+draw_gsa_id0:
+    ldw t3, 0(a0)
+    add t3, t3, t3
+    add t3, t3, t3      ; t3 * 4 to have a valid address
+    addi t4, t4, GSA0
+    stw t4, 0(ao)
+    ret
+; END:draw_gsa_id0
+
