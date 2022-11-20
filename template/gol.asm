@@ -174,34 +174,30 @@ set_pixel:
     ldw t1, 0(a1)           ; y-pos
     add t1, t1, t1
     add t1, t1, t1          ; y*4
-
     addi t2, zero, LEDS     ; led array address
     addi t3, zero, 4        ; modulo
-    jmpi loop_cond
-
-    loop:                   ; to choose the right led array
-        sub t0, t0, 4
-        addi t2, t2, 4
-    loop_cond:
-        bgeu t0, t3, loop
-
+    jmpi loop1_cond
+    loop1:                   ; to choose the right led array
+        sub t0, t0, t3
+        add t2, t2, t3
+    loop1_cond:
+        bgeu t0, t3, loop1
     ldw t4, (t2)            ; load the led array
     add t6, t0, t1          ; pos = x + y*4
-
     addi t5, zero, 1
     sll t5, t5, t6          ; shift '1' at the right place
     or t7, t4, t5           ; turn on the led
     stw t7, (t2)            ; store in the RAM memory
-
     ret
 ; END:set_pixel
 
 ; BEGIN:wait
 wait: 
-    addi t0, zero, 0x80000  ; initial counter of 2e19
-    loop:
+    addi t0, zero, 1  ; initial counter of 2e19: set to 1 then ssli 19 
+    slli t0, t0, 19 ; times since can't be represent with 16 bits
+    loop2:
         ldw t1, SPEED(zero) ; decrement of the counter depends on the game speed
         sub t0, t0, t1
-        bne t0, zero, loop
+        bne t0, zero, loop2
     ret
 ; END:wait
