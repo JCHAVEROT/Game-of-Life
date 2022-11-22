@@ -170,104 +170,91 @@ clear_leds:
 
 ; BEGIN:set_pixel
 set_pixel:
-    ldw t0, 0(a0)           ; x-pos
-    ldw t1, 0(a1)           ; y-pos
-    add t1, t1, t1
-    add t1, t1, t1          ; y*4
-    addi t2, zero, LEDS     ; led array address
-    addi t3, zero, 4        ; modulo
+    addi t0, a0, 0          ; t0 = x-pos
+    slli t1, a1, 2          ; t1 = y-pos*4
+    addi t2, zero, LEDS     ; t2 = led array address
+    addi t3, zero, 4        ; t3 = number of columns in a led array
     jmpi loop1_cond
     loop1:                  ; to choose the right led array
         sub t0, t0, t3
         add t2, t2, t3
     loop1_cond:
         bgeu t0, t3, loop1
-    ldw t4, 0(t2)           ; load the led array
-    add t6, t0, t1          ; pos = x + y*4
-    addi t5, zero, 1
-    sll t5, t5, t6          ; shift '1' at the right place
-    or t7, t4, t5           ; turn on the led
-    stw t7, 0(t2)           ; store in the RAM memory
-    ret
+    ldw t4, 0(t2)           ; t4 = load the led array at address t2
+    add t5, t0, t1          ; t5 = x + y*4
+    addi t6, zero, 1        ; t6 = 1
+    sll t6, t6, t5          ; t6 = shift the '1' at the right place
+    or t7, t4, t6           ; t7 = turn on the led
+    stw t7, 0(t2)           ; MEM(t2) = t7
+    jmp ra
 ; END:set_pixel
 
 ; BEGIN:wait
 wait: 
-    addi t0, zero, 1  ; initial counter of 2e19: set to 1 then ssli 19 
-    slli t0, t0, 19 ; times since can't be represent with 16 bits
+    addi t0, zero, 1            ; initial counter of 2e19: set to 1 then ssli 19 
+    slli t0, t0, 19             ; times since 2e19 can't be represent with 16 bits
     loop2:
-        ldw t1, SPEED(zero) ; decrement of the counter depends on the game speed
+        ldw t1, SPEED(zero)     ; decrement of the counter depends on the game speed
         sub t0, t0, t1
         bne t0, zero, loop2
     ret
 ; END:wait
 
 ; --------------------------------------------- JEREMY
+
 ; BEGIN:get_gsa
 get_gsa:
     ldw t0, GSA_ID(zero)
-    beq t0, zero, get_gsa_id0
-    ldw t3, 0(a0)
-    add t3, t3, t3
-    add t3, t3, t3      ; t3 * 4 to have a valid address
-    addi t4, t4, GSA1
-    ldw v0, 0(t4)
-    ret
+    sll t1, a0, 2             ; t1 = a0 * 4 
+    ldw v0, GSA0(t1)          ; v0 = MEM(a0 * 4 + GSA0)
+    beq t0, zero, end         ; end if GSA_ID = 0
+    ldw v0, GSA1(t1)          ; v0 = MEM(a0 * 4 + GSA1)
+    end: 
+        jmp ra
 ; END:get_gsa
-
-; BEGIN:get_gsa_id0
-get_gsa_id0:
-    ldw t3, 0(a0)
-    add t3, t3, t3
-    add t3, t3, t3      ; t3 * 4 to have a valid address
-    addi t4, t4, GSA0
-    ldw v0, 0(t4)
-    ret
-; END:get_gsa_id0
 
 ; BEGIN:set_gsa
 set_gsa:
     ldw t0, GSA_ID(zero)
-    beq t0, zero, set_gsa_id0
-    ldw t3, 0(a0)
-    add t3, t3, t3
-    add t3, t3, t3      ; t3 * 4 to have a valid address
-    addi t4, t4, GSA1
-    stw t4, 0(ao)
-    ret
+    sll t1, a0, 2                 ; t1 = a0 * 4 
+    bne t0, zero, set_id1         ; jump to set_id1 if GSA_ID = 1
+    set_id0:
+        stw a1, GSA0(t1)          ; MEM(a0 * 4 + GSA0) = a1 
+        jmpi end
+    set_id1:
+        stw a1, GSA1(t1)          ; MEM(a0 * 4 + GSA1) = a1
+    end: 
+        jmp ra
 ; END:set_gsa
 
-; BEGIN:set_gsa_id0
-set_gsa_id0:
-    ldw t3, 0(a0)
-    add t3, t3, t3
-    add t3, t3, t3      ; t3 * 4 to have a valid address
-    addi t4, t4, GSA0
-    stw t4, 0(ao)
-    ret
-; END:set_gsa_id0
-
-; BEGIN:draw_gsa
-draw_gsa:
-    ldw t0, GSA_ID(zero)
-    beq t0, zero, draw_gsa_id0
-    ldw t3, 0(a0)
-    add t3, t3, t3
-    add t3, t3, t3      ; t3 * 4 to have a valid address
-    addi t4, t4, GSA1
-    stw t4, 0(ao)
-    ret
-; END:draw_gsa
-
-; BEGIN:draw_gsa_id0
-draw_gsa_id0:
-    ldw t3, 0(a0)
-    add t3, t3, t3
-    add t3, t3, t3      ; t3 * 4 to have a valid address
-    addi t4, t4, GSA0
-    stw t4, 0(ao)
-    ret
-; END:draw_gsa_id0
+; BEGIN:random_gsa
+random_gsa:
+    ldw t0, GSA_ID(zero)         ; t0 = current GSA in use
+    addi t1, zero, 8             ; t1 = number of arrays
+    addi t2, zero, 12            ; t2 = number of pixels in an array
+    addi t3, zero, 0             ; t3 = current array number
+    addi t4, zero, 0             ; t4 = current pixel number
+    addi t5, zero, 0             ; t5 = the generated array
+    addi t6, zero, GSA0          ; t6 = current array address, depend on GSA_ID
+    beq t0, zero, generate_pixel ; evaluate which GSA array to use
+    addi t6, zero, GSA1
+    jmpi generate_pixel
+    next_pixel:
+        addi t4, t4, 1            ; t4 += 1 : next pixel
+    generate_pixel:
+        ldw t0, RANDOM_NUM(zero)  ; t0 = draw a random number
+        andi t0, t0, 1            ; t0 = t0 % 2
+        slli t5, t5, 1            ; shift left logical by 1 the generated array t5
+        or t5, t5, t0             ; copy the generated pixel in the array
+        bne t4, t2, next_pixel    ; evaluate if next pixel, i.e. if t4 != t2
+    next_array:
+        stw t5, 0(t6)                ; save array
+        addi t4, zero, 0             ; t4 = 0 : reset pixel counter
+        addi t3, t3, 1               ; t3 += 1 : next array
+        addi t6, t6, 4               ; t6 += 4 : next array address
+        bne t3, t1, generate_pixel   ; evaluate if next array, i.e. if t3 != t1
+    jmp ra
+; END:random_gsa
 
 ; --------------------------------------------- SEB
 ;; BEGIN:wait
@@ -282,11 +269,12 @@ draw_gsa_id0:
 
 ; BEGIN:get_gsa
 get_gsa:
-    ldw t0, 0(GSA_ID)
+    ldw t0, GSA_ID(zero)
     bne t0, zero, gamesa1_1
+    slli a0, a0, 2              ;do y*4 to get a valid address
     ldw v0, GSA0(a0)
-    jmp end
-    gamesa1:
+    jmpi end
+    gamesa1_1:
         ldw v0, GSA1(a0)
     end:
     ret v0
@@ -294,13 +282,31 @@ get_gsa:
 
 ; BEGIN:set_gsa
 set_gsa:
-    ldw t0, 0(GSA_ID)
+    ldw t0, GSA_ID(zero)
     bne t0, zero, gamesa1_2
+    slli a1, a1, 2              ;do y*4 to get a valid address
     stw a0, GSA0(a1)
-    jmp end
+    jmpi end
     gamesa1_2:
         stw a0, GSA1(a1)
     end:
     
     ret
 ; END:set_gsa
+
+; BEGIN:draw_gsa
+draw_gsa:
+    call clear_leds
+    ldw t0, GSA_ID(zero)
+    
+    addi t1, zero, 0            ;line of the gsa 
+    addi t2, zero, 0            ;line
+    addi t3, zero, 0            ;column
+    addi t4, zero, 1            ;mask to only take the first bit (000...001)
+    
+    bne t0, zero, gamesa1_3
+    
+    gamesa1_3:
+
+    ret
+; END:draw_gsa
