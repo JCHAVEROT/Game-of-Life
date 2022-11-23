@@ -292,28 +292,47 @@ pause_game:
 
 ; BEGIN:change_steps
 change_steps:
-    ldw t0, a0, 0               ; t0 = the units
+    addi t0, a0, 0              ; t0 = the units
     addi t1, a1, 0              ; t1 = the tens         
     addi t2, a2, 0              ; t2 = the hundreds
-    addi t3, zero, 0xF          ; t3 = max
-    addi t4, zero, 0            ; t4 = sum of the steps
-check_tens:
-    bne t1, t3, check_units     ; check if max tens was reached
-    addi t1, zero, 0            ; t1 = 0 : set tens to zero
-    addi t2, t2, 1              ; t2 += 1 : increment the tens
-check_units:
-    bne t0, t3, increment       ; check if max units was reached
-    addi t0, zero, 0            ; t0 = 0 : set units to zero
-    addi t1, t1, 1              ; t1 += 1 : increment the tens
-    jmpi check_tens
-increment:
-    add t4, t4, t0          ; t4 = sum with the units   
-    sll t1, t1, 4 
-    add t4, t4, t1          ; t4 = sum with the tens
-    sll t2, t2, 8
-    add t4, t4, t2          ; t4 = sum with the hundreds
+    addi t3, zero, 0xF          ; t3 = max and mask
+    addi t4, zero, 0            ; t4 = the carry
+    addi t5, zero, 1            ; t5 = the mask to extract the carry
+    slli t5, t5, 4   
+    ldw t6, CURR_STEP(zero)     ; t6 = the current step
 
-    stw t4, CURR_STEP(zero)     ; save the changed steps
+    ; filter the digits of the current step
+    and t0, t6, t3              ; t0 = the units
+    slli t3, t3, 4              ; shift the mask by 4 positions
+    and t1, t6, t3              ; t1 = the tens
+    srli t1, t1, 4
+    slli t3, t3, 4              ; shift the mask by 4 positions         
+    and t2, t6, t3              ; t2 = the hundreds
+    srli t2, t2, 8
+    addi t3, zero, 0xF          ; reset the mask
+
+add_units:
+    add t0, t0, a0              ; perform the addition if the corresponding button is pressed 
+    and t4, t0, t5              ; t4 = extract the carry for the tens if any
+    srli t4, t4, 4  
+    and t0, t0, t3              ; t0 = the 4 LSB of the addition, that is the new units digit
+add_tens:
+    add t1, t1, a1              ; perform the addition if the corresponding button is pressed 
+    add t1, t1, t4              ; perform the addition with the carry if any
+    and t4, t1, t5              ; t4 = extract the carry for the hundreds if any
+    srli t4, t4, 4  
+    and t1, t1, t3              ; t4 = the 4 LSB of the addition, that is the new tens digit
+add_hundreds:
+    add t2, t2, a2              ; perform the addition if the corresponding button is pressed 
+    add t2, t2, t4              ; perform the addition with the carry if any
+    and t2, t2, t3              ; t4 = the 4 LSB of the addition, that is the new hundreds digit (don't care about the carry)
+
+end_change_steps:
+    slli t2, t2, 8
+    slli t1, t1, 4
+    or t2, t2, t1
+    or t2, t2, t0
+    stw t2, CURR_STEP(zero)     ; save the changed steps
     ret
 ; END:change_steps
 
