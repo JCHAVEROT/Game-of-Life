@@ -171,17 +171,18 @@ clear_leds:
 ; BEGIN:set_pixel
 set_pixel:
     addi t0, a0, 0          ; t0 = x-pos
-    slli t1, a1, 2          ; t1 = y-pos*4
+    addi t1, a1, 0          ; t1 = y-pos
     addi t2, zero, LEDS     ; t2 = led array address
     addi t3, zero, 4        ; t3 = number of columns in a led array
     jmpi loop1_cond
-    loop1:                  ; to choose the right led array
-        sub t0, t0, t3
-        add t2, t2, t3
-    loop1_cond:
-        bgeu t0, t3, loop1
+loop1:                      ; to choose the right led array, perform x mod 4 calculus
+    sub t0, t0, t3          ; x -= 4
+    add t2, t2, t3          ; (quotient of x/4) += 1, hence address t2 += 4
+loop1_cond:
+    bgeu t0, t3, loop1      ; check if x >= 4
     ldw t4, 0(t2)           ; t4 = load the led array at address t2
-    add t5, t0, t1          ; t5 = x + y*4
+    slli t0, t0, 3          ; t0 = (x mod 4) * 8
+    add t5, t0, t1          ; t5 = (x mod 4) * 8 + y
     addi t6, zero, 1        ; t6 = 1
     sll t6, t6, t5          ; t6 = shift the '1' at the right place
     or t7, t4, t6           ; t7 = turn on the led
@@ -193,10 +194,10 @@ set_pixel:
 wait: 
     addi t0, zero, 1            ; initial counter of 2e19: set to 1 then ssli 19 
     slli t0, t0, 19             ; times since 2e19 can't be represent with 16 bits
-    loop2:
-        ldw t1, SPEED(zero)     ; decrement of the counter depends on the game speed
-        sub t0, t0, t1
-        bne t0, zero, loop2
+loop2:
+    ldw t1, SPEED(zero)         ; decrement of the counter depends on the game speed
+    sub t0, t0, t1
+    bne t0, zero, loop2
     ret
 ; END:wait
 
@@ -230,7 +231,7 @@ end_set_gsa:
 
 ; BEGIN:random_gsa
 random_gsa:
-    ldw t0, GSA_ID(zero)         ; t0 = current GSA in use -- unused since choice of GSA delegated to set_gsa
+    ldw t0, GSA_ID(zero)         ; t0 = current GSA in use. Note: unused since choice of GSA delegated to set_gsa
     addi t1, zero, 0             ; t1 = current array number
     addi t2, zero, 0             ; t2 = current pixel number
     addi t3, zero, 0             ; t3 = the generated array   
@@ -296,13 +297,15 @@ change_steps:
     addi t2, a2, 0              ; t2 = the hundreds
     addi t3, zero, 0xF          ; t3 = max
     addi t4, zero, 0            ; t4 = sum of the steps
-
+check_tens:
+    bne t1, t3, check_units     ; check if max tens was reached
+    addi t1, zero, 0            ; t1 = 0 : set tens to zero
+    addi t2, t2, 1              ; t2 += 1 : increment the tens
+check_units:
     bne t0, t3, increment       ; check if max units was reached
     addi t0, zero, 0            ; t0 = 0 : set units to zero
     addi t1, t1, 1              ; t1 += 1 : increment the tens
-    bne t1, t3, increment       ; check if max tens was reached
-    addi t1, zero, 0            ; t1 = 0 : set tens to zero
-    addi t2, t2, 1              ; t2 += 1 : increment the tens
+    jmpi check_tens
 increment:
     add t4, t4, t0          ; t4 = sum with the units   
     sll t1, t1, 4 
@@ -317,8 +320,8 @@ increment:
 ; BEGIN:increment_seed
 increment_seed:
     ldw t0, SEED(zero)          ; t0 = retrieve the current game seed from memory
-    addi t1, zero, INIT         ; t1 = number for init state
-    addi t2, zero, RAND         ; t2 = number for random state
+    addi t1, zero, INIT         ; t1 = tag for init state
+    addi t2, zero, RAND         ; t2 = tag for random state
     addi t3, zero, N_GSA_LINES  ; t3 = number of lines in the GSA
     addi t4, zero, 0            ; t4 = counter for the GSA lines when copy the seed in state_init
     addi t5, zero, SEEDS        ; t5 = the seed address
@@ -331,22 +334,21 @@ increment_seed:
 state_init:
     addi t0, t0, 1          
     stw t0, SEED(zero)      ; MEM(SEED) += 1
-    sll t0, t0, 2           ; t0 = shift left logical by 2 of the seed number to have a valid address
+    sll t0, t0, 2           ; t0 *= 4 : shift left logical by 2 of the seed number to have a valid address
     add t5, t5, t0          ; t5 = get the address of the particular seed in use
     jmpi copy_seed
 next_seed:
-    addi t4, t4, 1
+    addi t4, t4, 1          ; t4 += 1 : next line in the GSA
     beq t4, t3, end_increment_seed
 copy_seed:
     addi a0, t4, 0          ; a0 = t4 : put the array number in reg a0
-    sll t7, t4, 2           ; t7 = sll by 2 of t4 to have a valid address
+    sll t7, t4, 2           ; t7 = t4 * 4 : sll by 2 of t4 to have a valid address
     and t7, t7, t5          ; t7 = t7 + t5 : address of the t4-th seed
-    addi a1, t7, 0          ; a1 = t7 : put the retrieved s in reg a1
+    addi a1, t7, 0          ; a1 = t7 : put the retrieved seed in reg a1
     call set_gsa
-    addi t4, t4, 1          ; t4 += 1 : next line in the GSA
-    bne t4, t3, copy_seed
+    jmpi next_seed
 state_rand:
-    bne t0, t2, end
+    bne t0, t2, end_increment_seed
     call random_gsa
 end_increment_seed:
     ldw a1, 0(sp)          ; retrieves a1 from the stack
@@ -394,6 +396,8 @@ set_gsa:
 
 ; BEGIN:set_pixel
 set_pixel:
+    ;GSA[y][x] = LEDS[checkmod][y + 8*(xmod4)]
+    addi t5, zero, 0
     
     ret
 ; END:set_pixel
@@ -408,7 +412,7 @@ draw_gsa:
     addi t7, zero, 1                    ;mask
     
     loop_draw_gsa1:                     ;iter lines
-        addi t1, zero, N_GSA_COLUMNS-1      ;max for x axis
+        addi t1, zero, N_GSA_COLUMNS-1  ;max for x axis
         add a0, t1, zero                ;put the value of the line in a0
         blt t2, zero, exit
         call get_gsa                    ;gsa of line y in v0
@@ -418,8 +422,9 @@ draw_gsa:
             add a0, t1, zero            ;put the column value in a0
             add a1, t2, zero            ;put the line value in a1
             bne t3, zero, set_pixel     ;set pixel if the LSB is 1
-            addi t1, t1, -1
-            blt t1, zero, loop_draw_gsa1
+            addi t1, t1, -1             ;decrement by 1
+            blt t1, zero, loop_draw_gsa1;check if not out of bounds
+            jmpi loop_draw_gsa2         ;jump if not yet complet
 
     exit:
 
