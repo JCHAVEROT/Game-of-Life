@@ -250,6 +250,7 @@ random_gsa:
     next_array:
         stw t5, 0(t6)                ; save array
         addi t4, zero, 0             ; t4 = 0 : reset pixel counter
+        addi t5, zero, 0             ; t5 = 0 : reset the generated array
         addi t3, t3, 1               ; t3 += 1 : next array
         addi t6, t6, 4               ; t6 += 4 : next array address
         bne t3, t1, generate_pixel   ; evaluate if next array, i.e. if t3 != t1
