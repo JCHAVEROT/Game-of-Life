@@ -186,7 +186,7 @@ set_pixel:
     sll t6, t6, t5          ; t6 = shift the '1' at the right place
     or t7, t4, t6           ; t7 = turn on the led
     stw t7, 0(t2)           ; MEM(t2) = t7
-    jmp ra
+    ret
 ; END:set_pixel
 
 ; BEGIN:wait
@@ -205,57 +205,155 @@ wait:
 ; BEGIN:get_gsa
 get_gsa:
     ldw t0, GSA_ID(zero)
-    sll t1, a0, 2             ; t1 = a0 * 4 
-    ldw v0, GSA0(t1)          ; v0 = MEM(a0 * 4 + GSA0)
-    beq t0, zero, end         ; end if GSA_ID = 0
-    ldw v0, GSA1(t1)          ; v0 = MEM(a0 * 4 + GSA1)
-    end: 
-        jmp ra
+    sll t1, a0, 2                     ; t1 = a0 * 4 
+    ldw v0, GSA0(t1)                  ; v0 = MEM(a0 * 4 + GSA0)
+    beq t0, zero, end_get_gsa         ; end if GSA_ID = 0
+    ldw v0, GSA1(t1)                  ; v0 = MEM(a0 * 4 + GSA1)
+end_get_gsa: 
+    ret
 ; END:get_gsa
 
 ; BEGIN:set_gsa
 set_gsa:
     ldw t0, GSA_ID(zero)
-    sll t1, a0, 2                 ; t1 = a0 * 4 
     bne t0, zero, set_id1         ; jump to set_id1 if GSA_ID = 1
-    set_id0:
-        stw a1, GSA0(t1)          ; MEM(a0 * 4 + GSA0) = a1 
-        jmpi end
-    set_id1:
-        stw a1, GSA1(t1)          ; MEM(a0 * 4 + GSA1) = a1
-    end: 
-        jmp ra
+set_id0:
+    sll t0, a0, 2                 ; t0 = a0 * 4 
+    stw a1, GSA0(t0)              ; MEM(a0 * 4 + GSA0) = a1 
+    jmpi end_set_gsa
+set_id1:
+    sll t0, a0, 2                 ; t0 = a0 * 4 
+    stw a1, GSA1(t0)              ; MEM(a0 * 4 + GSA1) = a1
+end_set_gsa: 
+    ret
 ; END:set_gsa
 
 ; BEGIN:random_gsa
 random_gsa:
-    ldw t0, GSA_ID(zero)         ; t0 = current GSA in use
-    addi t1, zero, 8             ; t1 = number of arrays
-    addi t2, zero, 12            ; t2 = number of pixels in an array
-    addi t3, zero, 0             ; t3 = current array number
-    addi t4, zero, 0             ; t4 = current pixel number
-    addi t5, zero, 0             ; t5 = the generated array
-    addi t6, zero, GSA0          ; t6 = current array address, depend on GSA_ID
-    beq t0, zero, generate_pixel ; evaluate which GSA array to use
-    addi t6, zero, GSA1
+    ldw t0, GSA_ID(zero)         ; t0 = current GSA in use -- unused since choice of GSA delegated to set_gsa
+    addi t1, zero, 0             ; t1 = current array number
+    addi t2, zero, 0             ; t2 = current pixel number
+    addi t3, zero, 0             ; t3 = the generated array   
+    addi t4, a0, 0               ; t4 = a0 : save content of reg a0
+    addi t5, a1, 0               ; t5 = a1 : save content of reg a1
+    
     jmpi generate_pixel
-    next_pixel:
-        addi t4, t4, 1            ; t4 += 1 : next pixel
-    generate_pixel:
-        ldw t0, RANDOM_NUM(zero)  ; t0 = draw a random number
-        andi t0, t0, 1            ; t0 = t0 % 2
-        slli t5, t5, 1            ; shift left logical by 1 the generated array t5
-        or t5, t5, t0             ; copy the generated pixel in the array
-        bne t4, t2, next_pixel    ; evaluate if next pixel, i.e. if t4 != t2
-    next_array:
-        stw t5, 0(t6)                ; save array
-        addi t4, zero, 0             ; t4 = 0 : reset pixel counter
-        addi t5, zero, 0             ; t5 = 0 : reset the generated array
-        addi t3, t3, 1               ; t3 += 1 : next array
-        addi t6, t6, 4               ; t6 += 4 : next array address
-        bne t3, t1, generate_pixel   ; evaluate if next array, i.e. if t3 != t1
-    jmp ra
+next_pixel:
+    addi t2, t2, 1                       ; t2 += 1 : next pixel
+    beq t2, N_GSA_COLUMNS, next_array    ; evaluate if next array, i.e. if t2 == N_GSA_COLUMNS
+generate_pixel:
+    ldw t0, RANDOM_NUM(zero)  ; t0 = draw a random number
+    andi t0, t0, 1            ; t0 = t0 % 2
+    slli t3, t3, 1            ; shift left logical by 1 the generated array t3
+    or t3, t3, t0             ; copy the generated pixel in the array
+    jmpi next_pixel
+next_array:
+    addi a0, t1, 0               ; a0 = t1 : put the array number in reg a0
+    addi a1, t3, 0               ; a1 = t3 : put the generated array in reg a1
+    call set_gsa
+    addi t2, zero, 0             ; t2 = 0 : reset pixel counter
+    addi t3, zero, 0             ; t3 = 0 : reset the generated array
+    addi t1, t1, 1               ; t1 += 1 : next array
+    bne t1, N_GSA_LINES, generate_pixel   ; evaluate if generate pixel, i.e. if t1 != N_GSA_LINES
+
+    addi a0, t4, 0                 ; a0 = t4 : put back the content of reg a0
+    addi a1, t5, 0                 ; a1 = t5 : put back the content of reg a1
+    ret
 ; END:random_gsa
+
+; BEGIN:change_speed
+change_speed:
+    ldw t0, SPEED(zero)         ; t0 = load game speed from memory
+    addi t1, zero, MIN_SPEED    ; t1 = min speed
+    addi t2, zero, MAX_SPEED    ; t2 = max speed
+    bne a0, zero, decrease      ; branch depending on whether increasing or decreasing
+increase:
+    beq t0, t1, end_change_speed   ; branch if already max speed
+    addi t0, t0, 1                 ; t0 += 1 
+    jmpi end_change_speed
+decrease:
+    beq t0, t2, end_change_speed   ; branch if already min speed
+    addi t0, t0, -1                ; t0 += -1       
+end_change_speed:
+    stw t0, SPEED(zero)    ; save speed in memory
+    ret
+; END:change_speed
+
+; BEGIN:pause_game
+pause_game:
+    ldw t0, PAUSE(zero)     ; t0 = load game pause from memory
+    addi t1, zero, 1        ; t1 = 1
+    xor t2, t0, t1          ; t2 = t0 xor 1 to invert the bits
+    and t0, t2, t1          ; t0 = only the first bit xored
+    stw t0, PAUSE(zero)     ; save game pause in memory
+    ret
+; END:pause_game
+
+; BEGIN:change_steps
+change_steps:
+    ldw t0, a0, 0               ; t0 = the units
+    addi t1, a1, 0              ; t1 = the tens         
+    addi t2, a2, 0              ; t2 = the hundreds
+    addi t3, zero, 0xF          ; t3 = max
+    addi t4, zero, 0            ; t4 = sum of the steps
+
+    bne t0, t3, increment       ; check if max units was reached
+    addi t0, zero, 0            ; t0 = 0 : set units to zero
+    addi t1, t1, 1              ; t1 += 1 : increment the tens
+    bne t1, t3, increment       ; check if max tens was reached
+    addi t1, zero, 0            ; t1 = 0 : set tens to zero
+    addi t2, t2, 1              ; t2 += 1 : increment the tens
+increment:
+    add t4, t4, t0          ; t4 = sum with the units   
+    sll t1, t1, 4 
+    add t4, t4, t1          ; t4 = sum with the tens
+    sll t2, t2, 8
+    add t4, t4, t2          ; t4 = sum with the hundreds
+
+    stw t4, CURR_STEP(zero)     ; save the changed steps
+    ret
+; END:change_steps
+
+; BEGIN:increment_seed
+increment_seed:
+    ldw t0, SEED(zero)          ; t0 = retrieve the current game seed from memory
+    addi t1, zero, INIT         ; t1 = number for init state
+    addi t2, zero, RAND         ; t2 = number for random state
+    addi t3, zero, N_GSA_LINES  ; t3 = number of lines in the GSA
+    addi t4, zero, 0            ; t4 = counter for the GSA lines when copy the seed in state_init
+    addi t5, zero, SEEDS        ; t5 = the seed address
+    
+    addi sp, sp, -8             ; sp -= 8 : prepare for pushing two words
+    stw a0, 4(sp)               ; save content of reg a0 in the stack
+    stw a1, 0(sp)               ; save content of reg a1 in the stack
+    
+    bne t0, t1, state_rand      ; decide where to branch according to the seed
+state_init:
+    addi t0, t0, 1          
+    stw t0, SEED(zero)      ; MEM(SEED) += 1
+    sll t0, t0, 2           ; t0 = shift left logical by 2 of the seed number to have a valid address
+    add t5, t5, t0          ; t5 = get the address of the particular seed in use
+    jmpi copy_seed
+next_seed:
+    addi t4, t4, 1
+    beq t4, t3, end_increment_seed
+copy_seed:
+    addi a0, t4, 0          ; a0 = t4 : put the array number in reg a0
+    sll t7, t4, 2           ; t7 = sll by 2 of t4 to have a valid address
+    and t7, t7, t5          ; t7 = t7 + t5 : address of the t4-th seed
+    addi a1, t7, 0          ; a1 = t7 : put the retrieved s in reg a1
+    call set_gsa
+    addi t4, t4, 1          ; t4 += 1 : next line in the GSA
+    bne t4, t3, copy_seed
+state_rand:
+    bne t0, t2, end
+    call random_gsa
+end_increment_seed:
+    ldw a1, 0(sp)          ; retrieves a1 from the stack
+    ldw a0, 4(sp)          ; retrieves a2 from the stack
+    addi sp, sp, 8         ; sp += 8 : update stack pointer
+    ret
+; END:increment_seed
 
 ; --------------------------------------------- SEB
 ;; BEGIN:wait
@@ -267,7 +365,6 @@ random_gsa:
 ;    ret
 ;; END:wait
 
-
 ; BEGIN:get_gsa
 get_gsa:
     ldw t0, GSA_ID(zero)
@@ -278,7 +375,7 @@ get_gsa:
     gamesa1_1:
         ldw v0, GSA1(a0)
     end:
-    ret v0
+    ret
 ; END:get_gsa
 
 ; BEGIN:set_gsa
@@ -295,19 +392,36 @@ set_gsa:
     ret
 ; END:set_gsa
 
+; BEGIN:set_pixel
+set_pixel:
+    
+    ret
+; END:set_pixel
+
 ; BEGIN:draw_gsa
 draw_gsa:
+
     call clear_leds
-    ldw t0, GSA_ID(zero)
+    addi t2, zero, N_GSA_LINES-1        ;max for y axis
+    addi a0, zero, 0                    ;argument for x
+    addi a1, zero, 0                    ;argument for y
+    addi t7, zero, 1                    ;mask
     
-    addi t1, zero, 0            ;line of the gsa 
-    addi t2, zero, 0            ;line
-    addi t3, zero, 0            ;column
-    addi t4, zero, 1            ;mask to only take the first bit (000...001)
-    
-    bne t0, zero, gamesa1_3
-    
-    gamesa1_3:
+    loop_draw_gsa1:                     ;iter lines
+        addi t1, zero, N_GSA_COLUMNS-1      ;max for x axis
+        add a0, t1, zero                ;put the value of the line in a0
+        blt t2, zero, exit
+        call get_gsa                    ;gsa of line y in v0
+        loop_draw_gsa2:                 ;iter columns
+            srl t3, v0, t1              ;shift right to get the bit in LSB
+            and t3, t3, t7              ;apply mask to get only LSB
+            add a0, t1, zero            ;put the column value in a0
+            add a1, t2, zero            ;put the line value in a1
+            bne t3, zero, set_pixel     ;set pixel if the LSB is 1
+            addi t1, t1, -1
+            blt t1, zero, loop_draw_gsa1
+
+    exit:
 
     ret
 ; END:draw_gsa
