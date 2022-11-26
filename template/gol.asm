@@ -231,17 +231,19 @@ end_set_gsa:
 
 ; BEGIN:random_gsa
 random_gsa:
-    ldw t0, GSA_ID(zero)         ; t0 = current GSA in use. Note: unused since choice of GSA delegated to set_gsa
-    addi t1, zero, 0             ; t1 = current array number
-    addi t2, zero, 0             ; t2 = current pixel number
-    addi t3, zero, 0             ; t3 = the generated array   
-    addi t4, a0, 0               ; t4 = a0 : save content of reg a0
-    addi t5, a1, 0               ; t5 = a1 : save content of reg a1
+    addi sp, sp, -4                 ; make space for the return address
+    stw ra, 0(sp)                   ; put on the stack the return value
+    ldw t0, GSA_ID(zero)            ; t0 = current GSA in use. Note: unused since choice of GSA delegated to set_gsa
+    addi t1, zero, 0                ; t1 = current array number
+    addi t2, zero, 0                ; t2 = current pixel number
+    addi t3, zero, 0                ; t3 = the generated array 
+    addi t4, zero, N_GSA_LINES      ; t4 = number of lines in a gsa
+    addi t5, zero, N_GSA_COLUMNS    ; t5 = number of columns in a gsa  
     
     jmpi generate_pixel
 next_pixel:
-    addi t2, t2, 1                       ; t2 += 1 : next pixel
-    beq t2, N_GSA_COLUMNS, next_array    ; evaluate if next array, i.e. if t2 == N_GSA_COLUMNS
+    addi t2, t2, 1            ; t2 += 1 : next pixel
+    beq t2, t5, next_array    ; evaluate if next array, i.e. if t2 == N_GSA_COLUMNS
 generate_pixel:
     ldw t0, RANDOM_NUM(zero)  ; t0 = draw a random number
     andi t0, t0, 1            ; t0 = t0 % 2
@@ -255,10 +257,10 @@ next_array:
     addi t2, zero, 0             ; t2 = 0 : reset pixel counter
     addi t3, zero, 0             ; t3 = 0 : reset the generated array
     addi t1, t1, 1               ; t1 += 1 : next array
-    bne t1, N_GSA_LINES, generate_pixel   ; evaluate if generate pixel, i.e. if t1 != N_GSA_LINES
+    bne t1, t4, generate_pixel   ; evaluate if generate pixel, i.e. if t1 != N_GSA_LINES
 
-    addi a0, t4, 0                 ; a0 = t4 : put back the content of reg a0
-    addi a1, t5, 0                 ; a1 = t5 : put back the content of reg a1
+    ldw ra, 0(sp)           ; load the previous return address
+    addi sp, sp, 4          ; update the stack pointer
     ret
 ; END:random_gsa
 
@@ -338,6 +340,8 @@ end_change_steps:
 
 ; BEGIN:increment_seed
 increment_seed:
+    addi sp, sp, -4         ; make space for the return address
+    stw ra, 0(sp)           ; put on the stack the return value
     ldw t0, SEED(zero)          ; t0 = retrieve the current game seed from memory
     addi t1, zero, INIT         ; t1 = tag for init state
     addi t2, zero, RAND         ; t2 = tag for random state
@@ -372,6 +376,8 @@ copy_seed:
 set_random_gsa:
     call random_gsa
 end_increment_seed:
+    ldw ra, 0(sp)           ; load the previous return address
+    addi sp, sp, 4          ; update the stack pointer
     ret
 save_stack:
     addi sp, sp, -32       ; sp -= 32 : prepare for pushing eight words
@@ -396,6 +402,179 @@ retrieve_stack:
     addi sp, sp, 32      ; sp == 32 : eight words were popped
     ret
 ; END:increment_seed
+
+; BEGIN:select_action
+select_action:
+    addi sp, sp, -4         ; make space for the return address
+    stw ra, 0(sp)           ; put on the stack the return value
+    ldw t0, CURR_STATE(zero)    ; t0 = current game state
+    addi t1, zero, INIT         ; t1 = tag for init state
+    addi t2, zero, RAND         ; t2 = tag for random state
+    addi t3, zero, RUN          ; t3 = tag for random state
+    addi t5, zero, 1            ; t5 = 1 for the reference and masking
+    
+    beq t0, t1, select_init_rand
+    beq t0, t2, select_init_rand
+    beq t0, t3, select_run
+    jmpi end_select_action
+retrieve_buttons:
+    slli t5, t5, 4
+    and t0, a0, t5
+    srli t5, t5, 1
+    and t1, a0, t5
+    srli t5, t5, 1
+    and t2, a0, t5
+    srli t5, t5, 1
+    and t3, a0, t5
+    srli t5, t5, 1
+    and t4, a0, t5
+    ret
+select_init_rand:               ; if current state is init state or random state
+    call retrieve_buttons
+    bne t0, t5, but234_init_rand
+    call save_stack
+    call increment_seed         ; call increment_seed if button 0 is pressed
+    call retrieve_stack
+but234_init_rand:
+    add a0, zero, t4
+    add a1, zero, t3
+    add a2, zero, t2
+    call change_steps           ; call change_steps with which button is pressed
+    jmpi end_select_action    
+select_run:                     ; if current state is run state
+    call retrieve_buttons
+    bne t0, t5, but12_run
+    call pause_game
+but1_run:
+    bne t1, t5, but2_run
+    addi a0, zero, 0
+    call change_speed
+but2_run:
+    bne t2, t5, but4_run
+    addi a0, zero, 1
+    call change_speed
+but4_run:
+    bne t4, t5, but4_run
+    call increment_seed 
+
+save_stack:
+    addi sp, sp, -32       ; sp -= 32 : prepare for pushing eight words
+    stw t0, 28(sp) 
+    stw t1, 24(sp)   
+    stw t2, 20(sp) 
+    stw t3, 16(sp)   
+    stw t4, 12(sp)  
+    stw t5, 8(sp) 
+    stw t6, 4(sp)  
+    stw t7, 0(sp)
+    ret
+retrieve_stack:
+    ldw t7, 0(sp)
+    ldw t6, 4(sp)
+    ldw t5, 8(sp)
+    ldw t4, 12(sp)
+    ldw t3, 16(sp)
+    ldw t2, 20(sp)
+    ldw t1, 24(sp)
+    ldw t0, 28(sp)
+    addi sp, sp, 32      ; sp == 32 : eight words were popped
+    ret
+end_select_action:
+    ldw ra, 0(sp)           ; load the previous return address
+    addi sp, sp, 4          ; update the stack pointer
+    ret
+; END:select_action
+
+; BEGIN:update_gsa
+update_gsa:
+    ldw t1, PAUSE(zero)                 ; t1 = load the word containing if the game is paused
+    beq t1, zero, end_update_gsa        ; the procedure should not do anything if the game is paused  
+
+    addi sp, sp, -4                     ; make space for the return address
+    stw ra, 0(sp)                       ; put on the stack the return value
+    ldw t0, GSA_ID(zero)                ; t0 = load the current gsa_id
+    
+    addi t2, zero, N_GSA_LINES          ; t2 = number of lines in a gsa
+    addi t3, zero, N_GSA_COLUMNS        ; t3 = number of columns in a gsa
+    addi t4, zero, N_GSA_COLUMNS - 1    ; t4 = x-pos (we run the array backwards)
+    addi t5, zero, 0                    ; t5 = y-pos
+    addi t6, zero, 0                    ; t6 = the new array
+
+next_pixel:
+    addi t4, t4, -1             ; t4 += 1 : next pixel
+    blt t4, zero, next_array    ; evaluate if next array, i.e. if t4 < 0
+generate_pixel:
+    addi a0, t4, 0          ; put in the right registers the coordinates
+    addi a1, t5, 0
+    call save_stack
+    call find_neighbours
+    addi a0, v0, 0
+    addi a1, v1, 0
+    call cell_fate              ; retrieve the fate of cell at pos (t4, t5)
+    call retrieve_stack
+    slli t6, t6, 1
+    or t6, t6, v0               ; add the fate to the array
+    jmpi next_pixel
+next_array:
+    addi a0, t5, 0                      ; a0 = t5 = y-pos : put the array number in reg a0
+    addi a1, t6, 0                      ; a1 = t6 : put the generated array in reg a1
+    call set_gsa_inversed
+    addi t4, zero, N_GSA_COLUMNS - 1    ; t4 = 11 : reset pixel counter
+    addi t6, zero, 0                    ; t6 = 0 : reset the generated array
+    addi t5, t5, 1                      ; t5 += 1 : next array
+    bne t5, t2, generate_pixel          ; evaluate if generate pixel, i.e. if t5 != N_GSA_LINES
+    jmpi invert_gsa_id
+
+set_gsa_inversed:
+    ldw t0, GSA_ID(zero)            ; t0 = load the current gsa_id
+    beq t0, zero, set_inversed_id1  ; jump to set_inversed_id1 if GSA_ID = 0
+set_inversed_id0:
+    sll t0, a0, 2                   ; t0 = a0 * 4 
+    stw a1, GSA0(t0)                ; MEM(a0 * 4 + GSA0) = a1 
+    jmpi end_set_gsa_inversed
+set_inversed_id1:
+    sll t0, a0, 2                   ; t0 = a0 * 4 
+    stw a1, GSA1(t0)                ; MEM(a0 * 4 + GSA1) = a1
+end_set_gsa_inversed: 
+    ret
+
+; inverting the gsa_id once the update is done
+invert_gsa_id:
+    ldw t0, GSA_ID(zero)    ; t0 = load the current gsa_id
+    addi t7, zero, 1        ; t7 = 1 for the reference
+    xor t7, t0, t7          ; invert the gsa_id
+    stw t0, GSA_ID(zero)
+    jmpi retrieve_address
+
+save_stack:
+    addi sp, sp, -32       ; sp -= 32 : prepare for pushing eight words
+    stw t0, 28(sp) 
+    stw t1, 24(sp)   
+    stw t2, 20(sp) 
+    stw t3, 16(sp)   
+    stw t4, 12(sp)  
+    stw t5, 8(sp) 
+    stw t6, 4(sp)  
+    stw t7, 0(sp)
+    ret
+retrieve_stack:
+    ldw t7, 0(sp)
+    ldw t6, 4(sp)
+    ldw t5, 8(sp)
+    ldw t4, 12(sp)
+    ldw t3, 16(sp)
+    ldw t2, 20(sp)
+    ldw t1, 24(sp)
+    ldw t0, 28(sp)
+    addi sp, sp, 32      ; sp == 32 : eight words were popped
+    ret
+
+retrieve_address:
+    ldw ra, 0(sp)           ; load the previous return address
+    addi sp, sp, 4          ; update the stack pointer
+end_update_gsa:
+    ret
+; END:update_gsa
 
 ; --------------------------------------------- SEB
 ;; BEGIN:wait
