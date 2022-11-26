@@ -344,15 +344,16 @@ increment_seed:
     addi t3, zero, N_GSA_LINES  ; t3 = number of lines in the GSA
     addi t4, zero, 0            ; t4 = counter for the GSA lines when copy the seed in state_init
     addi t5, zero, SEEDS        ; t5 = the seed address
-    
-    addi sp, sp, -8             ; sp -= 8 : prepare for pushing two words
-    stw a0, 4(sp)               ; save content of reg a0 in the stack
-    stw a1, 0(sp)               ; save content of reg a1 in the stack
-    
-    bne t0, t1, state_rand      ; decide where to branch according to the seed
+    ldw t6, CURR_STATE(zero)    ; t6 = retrieve the current game state from memory
+    addi t7, zero, N_SEEDS      ; t7 = the number of seeds
+
+    beq t6, t2, state_rand      ; decide where to branch according to the state
+
 state_init:
+    beq t0, t7, set_random_gsa
     addi t0, t0, 1          
     stw t0, SEED(zero)      ; MEM(SEED) += 1
+    beq t0, t7, set_random_gsa
     sll t0, t0, 2           ; t0 *= 4 : shift left logical by 2 of the seed number to have a valid address
     add t5, t5, t0          ; t5 = get the address of the particular seed in use
     jmpi copy_seed
@@ -362,17 +363,37 @@ next_seed:
 copy_seed:
     addi a0, t4, 0          ; a0 = t4 : put the array number in reg a0
     sll t7, t4, 2           ; t7 = t4 * 4 : sll by 2 of t4 to have a valid address
-    and t7, t7, t5          ; t7 = t7 + t5 : address of the t4-th seed
+    add t7, t7, t5          ; t7 = t7 + t5 : address of the t4-th seed
     addi a1, t7, 0          ; a1 = t7 : put the retrieved seed in reg a1
+    call save_stack
     call set_gsa
+    call retrieve_stack
     jmpi next_seed
-state_rand:
-    bne t0, t2, end_increment_seed
+set_random_gsa:
     call random_gsa
 end_increment_seed:
-    ldw a1, 0(sp)          ; retrieves a1 from the stack
-    ldw a0, 4(sp)          ; retrieves a2 from the stack
-    addi sp, sp, 8         ; sp += 8 : update stack pointer
+    ret
+save_stack:
+    addi sp, sp, -32       ; sp -= 32 : prepare for pushing eight words
+    stw t0, 28(sp) 
+    stw t1, 24(sp)   
+    stw t2, 20(sp) 
+    stw t3, 16(sp)   
+    stw t4, 12(sp)  
+    stw t5, 8(sp) 
+    stw t6, 4(sp)  
+    stw t7, 0(sp)
+    ret
+retrieve_stack:
+    ldw t7, 0(sp)
+    ldw t6, 4(sp)
+    ldw t5, 8(sp)
+    ldw t4, 12(sp)
+    ldw t3, 16(sp)
+    ldw t2, 20(sp)
+    ldw t1, 24(sp)
+    ldw t0, 28(sp)
+    addi sp, sp, 32      ; sp == 32 : eight words were popped
     ret
 ; END:increment_seed
 
