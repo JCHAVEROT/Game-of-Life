@@ -403,6 +403,61 @@ retrieve_stack:
     ret
 ; END:increment_seed
 
+; BEGIN:update_state
+update_state:
+    ;a0 has a 32-bit word s.t. the 5 LSB's are the bits decribing if the button is pressed or not
+    ;and t0, a0, 0x1F           ;takes the 5 LSB's from a0
+    ldw t1, CURR_STATE(zero)    ;get the current state
+    addi t2, zero, 0            ;iter to compare game state
+    bne t1, t2, notInit
+    addi t2, zero, N_SEEDS      ;to check if b0=N
+    ldw t3, SEED(zero)          ;get the seed number
+    and t0, a0, 1               ;check if b0 is pressed
+    beq t0, zero, notPressed_US
+    addi t3, t3, 1              ;incremented seed by 1 since b0 was pressed
+    bne t3, t2, exit_US
+    addi t1, t1, 1              ;b0=N, state INIT=0 goes to state RAND=1
+    stw t1, CURR_STATE(zero)    ;store the new current state
+    jmpi exit_US
+    notPressed_US:
+        and t0, a0, 2           ;check if b1 is pressed
+        beq t0, zero, exit_US   ;if not pressed, then do nothimg
+        addi t1, t1, 2          ;b1 is pressed, state INIT=0 goes to state RUN=2
+        jmpi exit_US
+    notInit_US:
+        addi, t2, t2, 1         ;iter to compare game state    
+        bne t1, t2, runState_US
+        and t0, a0, 2           ;check if b1 is pressed
+        beq t0, zero, exit_US
+        addi t1, t1, 1          ;b1 is pressed, state RAND=1 goes to state RUN=2
+        stw t1, CURR_STATE(zero);store the new current state
+        jmpi exit_US
+    runState_US:
+        ldw t2, CURR_STEP(zero) ;load the current step
+        beq t2, zero, endSteps_US
+        and t0, a0, 8           ;check if b3 is pressed
+        beq t0, zero, exit_US
+        addi t1, zero, 0        ;b3 is pressed, state RUN=2 goes to state INIT=0
+        addi sp, sp, -4         ;make space for the return address
+        stw ra, 0(sp)           ;put on the stack the return value
+        call reset_game
+        ldw ra, 0(sp)           ;load the previous return address
+        addi sp, sp, 4          ;update the stack pointer
+        jmpi exit_US
+        endSteps_US:
+            addi t1, zero, 0    ;no more steps, state RUN=2 goes to state INIT=0
+            addi sp, sp, -4         ;make space for the return address
+            stw ra, 0(sp)           ;put on the stack the return value
+            call reset_game
+            ldw ra, 0(sp)           ;load the previous return address
+            addi sp, sp, 4          ;update the stack pointer
+            jmpi exit_US
+
+    exit_US:
+
+    ret
+;END:update_state
+
 ; BEGIN:select_action
 select_action:
     addi sp, sp, -4         ; make space for the return address
@@ -484,6 +539,104 @@ end_select_action:
     addi sp, sp, 4          ; update the stack pointer
     ret
 ; END:select_action
+
+; BEGIN:cell_fate
+cell_fate:
+    bne a1, zero, isAlive_CF        ;the cell is alive
+    addi t0, zero, 3                ;put 3 in register t0
+    addi t1, zero, 2                ;put 2 in register t1
+    bne a0, t0, exit_CF             ;check if population is equal to 3
+    addi v0, zero, 1                ;cell was dead and has exactly 3 live neighbors, so becomes alive
+    jmpi exit_CF
+    isAlive_CF:
+        blt a0, t1, cellDies_CF     ;alive cell has underpopulation around it
+        blt t0, a0, cellDies_CF     ;alive cell has overpopulation around it
+        addi v0, zero, 1            ;alive cell has 2 or 3 alive neighbors, so stays alive
+        jmpi exit_CF
+        cellDies_CF:
+            addi v0, zero, 0
+            jmpi exit_CF
+    exit_CF:
+
+    ret
+;END:cell_fate
+
+; BEGIN:find_neighbors
+find_neighbors:
+    addi sp, sp, -8                 ;make space on the stack
+    stw a0, 4(sp)                   ;store the x-coord
+    stw a1, 0(sp)                   ;store the y-coord
+    ;add a0, zero, a1                ;put the y-coord in a0
+    addi t0, zero, 1                ;iter over 3 lines
+    add t1, zero, a1                ;put y-coord in register t1
+    addi t2, zero, -2               ;for the break
+    loop_FN:
+        addi sp, sp, -16
+        stw t0, 12(sp)               ;put iter in stack
+        stw t1, 8(sp)               ;put y-coord in stack
+        stw t2, 4(sp)               ;put break point in stack
+        stw ra, 0(sp)               ;store the return address
+        add a0, t1, t0              ;line: y + t0
+        call get_gsa
+        ldw ra, 0(sp)
+        ldw t2, 4(sp)
+        ldw t1, 8(sp)
+        ldw t0, 12(sp)
+        addi sp, sp, 16
+        addi sp, sp, -4             
+        stw v0, 0(sp)               ;store the GSA of line y + t0
+        addi t0, t0, -1             ;decrease iter by 1
+        bne t0, t2, loop_FN         ;if iter != -2 then loop
+    ldw t0, 0(sp)                   ;GSA line: y-1
+    ldw t1, 4(sp)                   ;GSA line: y
+    ldw t2, 8(sp)                   ;GSA line: y+1
+    ldw a1, 12(sp)                  ;y-coord
+    ldw a0, 16(sp)                  ;x-coord
+    addi sp, sp, 20                 ;reset stack pointer
+
+    addi a0, a0, -1                 ;bring the x to minus one position
+
+    srl t0, t0, a0                  ;have the three coordinates at the 3 LSBs
+    andi t0, t0, 7                  ;mask the rest 
+    srl t1, t1, a0
+    andi t1, t1, 7
+    srl t2, t2, a0
+    andi t2, t2, 7
+
+    addi t3, zero, 3                ;iterator
+    addi t4, zero, 0                ;iterator for shifts
+    addi t5, zero, 0                ;to store the bit we are looking at
+    addi v0, zero, 0                ;counter for neighbors
+
+    iterX_FN:
+        srl t5, t0, t4
+        andi t5, t5, 1
+        bne t5, zero, incrNeigh1_FN
+        addi v0, v0, 1
+        incrNeigh1_FN:
+        srl t5, t1, t4
+        andi t5, t5, 1
+        bne t5, zero, incrNeigh2_FN
+        addi, v0, v0, 1
+        incrNeigh2_FN:
+        srl t5, t2, t4
+        andi t5, t5, 1
+        bne t5, zero, incrNeigh3_FN
+        addi v0, v0, 1
+        incrNeigh3_FN:
+        addi t3, t3, -1
+        addi t4, t4, 1
+        bne t3, zero, iterX_FN
+
+    srli t5, t1, 1              ;get the value of the cell (x, y) to the LSB
+    and t5, t5, 1               ;mask the rest
+    add v1, zero, t5            ;store if the cell is alive or not
+    addi t5, t5, 1              ;to compare if the cell is alive or not
+    bne v1, t5, exit_FN
+    addi, v0, v0, -1            ;if the the cell is alive, must deduce by 1 to not count the target cell as a neighbor
+    exit_FN:
+    ret
+;END:find_neighbors
 
 ; BEGIN:update_gsa
 update_gsa:
@@ -589,6 +742,7 @@ end_update_gsa:
 ; BEGIN:get_gsa
 get_gsa:
     ldw t0, GSA_ID(zero)
+    andi a0, a0, 7              ;does a modulo 8
     bne t0, zero, gamesa1_1
     slli a0, a0, 2              ;do y*4 to get a valid address
     ldw v0, GSA0(a0)
