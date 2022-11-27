@@ -30,6 +30,23 @@
 
 main:
     ;; TODO
+    addi t0, zero, 1
+	addi t1, zero, 0xFF
+	stw t0, GSA_ID(zero)
+	stw t1, GSA1+12(zero)
+	addi a0, zero, 3
+    
+	call get_gsa
+
+    add t0, zero, zero
+	stw t0, GSA_ID(zero)
+	addi t1, zero, 57
+	addi a0, zero, 3
+	slli t2, a0, 2
+	stw t1, GSA0(t2)
+	call get_gsa
+
+
 
 font_data:
     .word 0xFC ; 0
@@ -203,27 +220,26 @@ loop2:
 
 ; --------------------------------------------- JEREMY
 
-; BEGIN:get_gsa
-get_gsa:
-    ldw t0, GSA_ID(zero)
-    sll t1, a0, 2                     ; t1 = a0 * 4 
-    ldw v0, GSA0(t1)                  ; v0 = MEM(a0 * 4 + GSA0)
-    beq t0, zero, end_get_gsa         ; end if GSA_ID = 0
-    ldw v0, GSA1(t1)                  ; v0 = MEM(a0 * 4 + GSA1)
-end_get_gsa: 
-    ret
-; END:get_gsa
+
+;get_gsa:
+    ;ldw t0, GSA_ID(zero)
+    ;sll t1, a0, 2                     ; t1 = a0 * 4 
+    ;ldw v0, GSA0(t1)                  ; v0 = MEM(a0 * 4 + GSA0)
+    ;beq t0, zero, end_get_gsa         ; end if GSA_ID = 0
+    ;ldw v0, GSA1(t1)                  ; v0 = MEM(a0 * 4 + GSA1)
+;end_get_gsa: 
+    ;ret
 
 ; BEGIN:set_gsa
 set_gsa:
     ldw t0, GSA_ID(zero)
     bne t0, zero, set_id1         ; jump to set_id1 if GSA_ID = 1
 set_id0:
-    sll t0, a0, 2                 ; t0 = a0 * 4 
+    slli t0, a0, 2                ; t0 = a0 * 4 
     stw a1, GSA0(t0)              ; MEM(a0 * 4 + GSA0) = a1 
     jmpi end_set_gsa
 set_id1:
-    sll t0, a0, 2                 ; t0 = a0 * 4 
+    slli t0, a0, 2                ; t0 = a0 * 4 
     stw a1, GSA1(t0)              ; MEM(a0 * 4 + GSA1) = a1
 end_set_gsa: 
     ret
@@ -231,6 +247,7 @@ end_set_gsa:
 
 ; BEGIN:random_gsa
 random_gsa:
+    ;addi sp, zero, CUSTOM_VAR_END
     addi sp, sp, -4                 ; make space for the return address
     stw ra, 0(sp)                   ; put on the stack the return value
     ldw t0, GSA_ID(zero)            ; t0 = current GSA in use. Note: unused since choice of GSA delegated to set_gsa
@@ -253,7 +270,9 @@ generate_pixel:
 next_array:
     addi a0, t1, 0               ; a0 = t1 : put the array number in reg a0
     addi a1, t3, 0               ; a1 = t3 : put the generated array in reg a1
+    call save_stack_RG
     call set_gsa
+    call retrieve_stack_RG
     addi t2, zero, 0             ; t2 = 0 : reset pixel counter
     addi t3, zero, 0             ; t3 = 0 : reset the generated array
     addi t1, t1, 1               ; t1 += 1 : next array
@@ -261,6 +280,25 @@ next_array:
 
     ldw ra, 0(sp)           ; load the previous return address
     addi sp, sp, 4          ; update the stack pointer
+    ret
+
+save_stack_RG:
+    addi sp, sp, -24       ; sp -= 32 : prepare for pushing eight words
+    stw t0, 20(sp) 
+    stw t1, 16(sp)   
+    stw t2, 12(sp) 
+    stw t3, 8(sp)   
+    stw t4, 4(sp)  
+    stw t5, 0(sp) 
+    ret
+retrieve_stack_RG:
+    ldw t5, 0(sp)
+    ldw t4, 4(sp)
+    ldw t3, 8(sp)
+    ldw t2, 12(sp)
+    ldw t1, 16(sp)
+    ldw t0, 20(sp)
+    addi sp, sp, 24      ; sp == 32 : eight words were popped
     ret
 ; END:random_gsa
 
@@ -271,11 +309,11 @@ change_speed:
     addi t2, zero, MAX_SPEED    ; t2 = max speed
     bne a0, zero, decrease      ; branch depending on whether increasing or decreasing
 increase:
-    beq t0, t1, end_change_speed   ; branch if already max speed
+    beq t0, t2, end_change_speed   ; branch if already max speed
     addi t0, t0, 1                 ; t0 += 1 
     jmpi end_change_speed
 decrease:
-    beq t0, t2, end_change_speed   ; branch if already min speed
+    beq t0, t1, end_change_speed   ; branch if already min speed
     addi t0, t0, -1                ; t0 += -1       
 end_change_speed:
     stw t0, SPEED(zero)    ; save speed in memory
@@ -285,9 +323,8 @@ end_change_speed:
 ; BEGIN:pause_game
 pause_game:
     ldw t0, PAUSE(zero)     ; t0 = load game pause from memory
-    addi t1, zero, 1        ; t1 = 1
-    xor t2, t0, t1          ; t2 = t0 xor 1 to invert the bits
-    and t0, t2, t1          ; t0 = only the first bit xored
+    xori t0, t0, 1          ; t0 = t0 xor 1 to invert the bits
+    andi t0, t0, 1          ; t0 = mask only the first bit xored
     stw t0, PAUSE(zero)     ; save game pause in memory
     ret
 ; END:pause_game
@@ -340,8 +377,8 @@ end_change_steps:
 
 ; BEGIN:increment_seed
 increment_seed:
-    addi sp, sp, -4         ; make space for the return address
-    stw ra, 0(sp)           ; put on the stack the return value
+    addi sp, sp, -4             ; make space for the return address
+    stw ra, 0(sp)               ; put on the stack the return value
     ldw t0, SEED(zero)          ; t0 = retrieve the current game seed from memory
     addi t1, zero, INIT         ; t1 = tag for init state
     addi t2, zero, RAND         ; t2 = tag for random state
@@ -351,27 +388,27 @@ increment_seed:
     ldw t6, CURR_STATE(zero)    ; t6 = retrieve the current game state from memory
     addi t7, zero, N_SEEDS      ; t7 = the number of seeds
 
-    beq t6, t2, state_rand      ; decide where to branch according to the state
+    beq t6, t2, set_random_gsa  ; decide where to branch according to the state
 
 state_init:
     beq t0, t7, set_random_gsa
     addi t0, t0, 1          
-    stw t0, SEED(zero)      ; MEM(SEED) += 1
+    stw t0, SEED(zero)          ; MEM(SEED) += 1
     beq t0, t7, set_random_gsa
-    sll t0, t0, 2           ; t0 *= 4 : shift left logical by 2 of the seed number to have a valid address
-    add t5, t5, t0          ; t5 = get the address of the particular seed in use
+    slli t0, t0, 2              ; t0 *= 4 : shift left logical by 2 of the seed number to have a valid address
+    add t5, t5, t0              ; t5 = get the address of the particular seed in use
     jmpi copy_seed
 next_seed:
     addi t4, t4, 1          ; t4 += 1 : next line in the GSA
     beq t4, t3, end_increment_seed
 copy_seed:
     addi a0, t4, 0          ; a0 = t4 : put the array number in reg a0
-    sll t7, t4, 2           ; t7 = t4 * 4 : sll by 2 of t4 to have a valid address
+    slli t7, t4, 2          ; t7 = t4 * 4 : sll by 2 of t4 to have a valid address
     add t7, t7, t5          ; t7 = t7 + t5 : address of the t4-th seed
     addi a1, t7, 0          ; a1 = t7 : put the retrieved seed in reg a1
-    call save_stack
+    call save_stack_IS
     call set_gsa
-    call retrieve_stack
+    call retrieve_stack_IS
     jmpi next_seed
 set_random_gsa:
     call random_gsa
@@ -379,7 +416,7 @@ end_increment_seed:
     ldw ra, 0(sp)           ; load the previous return address
     addi sp, sp, 4          ; update the stack pointer
     ret
-save_stack:
+save_stack_IS:
     addi sp, sp, -32       ; sp -= 32 : prepare for pushing eight words
     stw t0, 28(sp) 
     stw t1, 24(sp)   
@@ -390,7 +427,7 @@ save_stack:
     stw t6, 4(sp)  
     stw t7, 0(sp)
     ret
-retrieve_stack:
+retrieve_stack_IS:
     ldw t7, 0(sp)
     ldw t6, 4(sp)
     ldw t5, 8(sp)
@@ -409,25 +446,32 @@ update_state:
     ;and t0, a0, 0x1F           ;takes the 5 LSB's from a0
     ldw t1, CURR_STATE(zero)    ;get the current state
     addi t2, zero, 0            ;iter to compare game state
-    bne t1, t2, notInit
+    bne t1, t2, notInit_US
     addi t2, zero, N_SEEDS      ;to check if b0=N
-    ldw t3, SEED(zero)          ;get the seed number
-    and t0, a0, 1               ;check if b0 is pressed
+    ;ldw t3, SEED(zero)          ;get the seed number
+    andi t0, a0, 1               ;check if b0 is pressed
     beq t0, zero, notPressed_US
-    addi t3, t3, 1              ;incremented seed by 1 since b0 was pressed
+    
+    addi sp, sp, -4
+    stw ra, 0(sp)
+    call increment_seed     ;NOT FINISHED-------------------
+    ldw ra, 0(sp)
+    addi sp, sp, 4
+
+    ;addi t3, t3, 1              ;incremented seed by 1 since b0 was pressed
     bne t3, t2, exit_US
     addi t1, t1, 1              ;b0=N, state INIT=0 goes to state RAND=1
     stw t1, CURR_STATE(zero)    ;store the new current state
     jmpi exit_US
     notPressed_US:
-        and t0, a0, 2           ;check if b1 is pressed
+        andi t0, a0, 2           ;check if b1 is pressed
         beq t0, zero, exit_US   ;if not pressed, then do nothimg
-        addi t1, t1, 2          ;b1 is pressed, state INIT=0 goes to state RUN=2
+        addi t1, zero, 2          ;b1 is pressed, state INIT=0 goes to state RUN=2
         jmpi exit_US
     notInit_US:
-        addi, t2, t2, 1         ;iter to compare game state    
+        addi t2, t2, 1         ;iter to compare game state    
         bne t1, t2, runState_US
-        and t0, a0, 2           ;check if b1 is pressed
+        andi t0, a0, 2           ;check if b1 is pressed
         beq t0, zero, exit_US
         addi t1, t1, 1          ;b1 is pressed, state RAND=1 goes to state RUN=2
         stw t1, CURR_STATE(zero);store the new current state
@@ -435,7 +479,7 @@ update_state:
     runState_US:
         ldw t2, CURR_STEP(zero) ;load the current step
         beq t2, zero, endSteps_US
-        and t0, a0, 8           ;check if b3 is pressed
+        andi t0, a0, 8           ;check if b3 is pressed
         beq t0, zero, exit_US
         addi t1, zero, 0        ;b3 is pressed, state RUN=2 goes to state INIT=0
         addi sp, sp, -4         ;make space for the return address
@@ -456,7 +500,7 @@ update_state:
     exit_US:
 
     ret
-;END:update_state
+; END:update_state
 
 ; BEGIN:select_action
 select_action:
@@ -473,23 +517,18 @@ select_action:
     beq t0, t3, select_run
     jmpi end_select_action
 retrieve_buttons:
-    slli t5, t5, 4
-    and t0, a0, t5
-    srli t5, t5, 1
-    and t1, a0, t5
-    srli t5, t5, 1
-    and t2, a0, t5
-    srli t5, t5, 1
-    and t3, a0, t5
-    srli t5, t5, 1
-    and t4, a0, t5
+    andi t0, a0, 1
+    andi t1, a0, 2
+    andi t2, a0, 4
+    andi t3, a0, 8
+    andi t4, a0, 16
     ret
 select_init_rand:               ; if current state is init state or random state
     call retrieve_buttons
     bne t0, t5, but234_init_rand
-    call save_stack
+    call save_stack_SA
     call increment_seed         ; call increment_seed if button 0 is pressed
-    call retrieve_stack
+    call retrieve_stack_SA
 but234_init_rand:
     add a0, zero, t4
     add a1, zero, t3
@@ -498,21 +537,28 @@ but234_init_rand:
     jmpi end_select_action    
 select_run:                     ; if current state is run state
     call retrieve_buttons
-    bne t0, t5, but12_run
+    bne t0, t5, but1_run
+    call save_stack_SA
     call pause_game
+    call retrieve_stack_SA
 but1_run:
     bne t1, t5, but2_run
     addi a0, zero, 0
+    call save_stack_SA
     call change_speed
+    call retrieve_stack_SA
 but2_run:
     bne t2, t5, but4_run
     addi a0, zero, 1
+    call save_stack_SA
     call change_speed
+    call retrieve_stack_SA
 but4_run:
     bne t4, t5, but4_run
     call increment_seed 
+    jmpi end_select_action
 
-save_stack:
+save_stack_SA:
     addi sp, sp, -32       ; sp -= 32 : prepare for pushing eight words
     stw t0, 28(sp) 
     stw t1, 24(sp)   
@@ -523,7 +569,7 @@ save_stack:
     stw t6, 4(sp)  
     stw t7, 0(sp)
     ret
-retrieve_stack:
+retrieve_stack_SA:
     ldw t7, 0(sp)
     ldw t6, 4(sp)
     ldw t5, 8(sp)
@@ -559,10 +605,10 @@ cell_fate:
     exit_CF:
 
     ret
-;END:cell_fate
+; END:cell_fate
 
-; BEGIN:find_neighbors
-find_neighbors:
+; BEGIN:find_neighbours
+find_neighbours:
     addi sp, sp, -8                 ;make space on the stack
     stw a0, 4(sp)                   ;store the x-coord
     stw a1, 0(sp)                   ;store the y-coord
@@ -617,7 +663,7 @@ find_neighbors:
         srl t5, t1, t4
         andi t5, t5, 1
         bne t5, zero, incrNeigh2_FN
-        addi, v0, v0, 1
+        addi v0, v0, 1
         incrNeigh2_FN:
         srl t5, t2, t4
         andi t5, t5, 1
@@ -629,14 +675,14 @@ find_neighbors:
         bne t3, zero, iterX_FN
 
     srli t5, t1, 1              ;get the value of the cell (x, y) to the LSB
-    and t5, t5, 1               ;mask the rest
+    andi t5, t5, 1              ;mask the rest
     add v1, zero, t5            ;store if the cell is alive or not
-    addi t5, t5, 1              ;to compare if the cell is alive or not
+    addi t5, zero, 1              ;to compare if the cell is alive or not
     bne v1, t5, exit_FN
-    addi, v0, v0, -1            ;if the the cell is alive, must deduce by 1 to not count the target cell as a neighbor
+    addi v0, v0, -1            ;if the the cell is alive, must deduce by 1 to not count the target cell as a neighbor
     exit_FN:
     ret
-;END:find_neighbors
+; END:find_neighbours
 
 ; BEGIN:update_gsa
 update_gsa:
@@ -653,40 +699,40 @@ update_gsa:
     addi t5, zero, 0                    ; t5 = y-pos
     addi t6, zero, 0                    ; t6 = the new array
 
-next_pixel:
+next_pixel_UG:
     addi t4, t4, -1             ; t4 += 1 : next pixel
-    blt t4, zero, next_array    ; evaluate if next array, i.e. if t4 < 0
-generate_pixel:
+    blt t4, zero, next_array_UG    ; evaluate if next array, i.e. if t4 < 0
+generate_pixel_UG:
     addi a0, t4, 0          ; put in the right registers the coordinates
     addi a1, t5, 0
-    call save_stack
+    call save_stack_UG
     call find_neighbours
     addi a0, v0, 0
     addi a1, v1, 0
     call cell_fate              ; retrieve the fate of cell at pos (t4, t5)
-    call retrieve_stack
+    call retrieve_stack_UG
     slli t6, t6, 1
     or t6, t6, v0               ; add the fate to the array
-    jmpi next_pixel
-next_array:
+    jmpi next_pixel_UG
+next_array_UG:
     addi a0, t5, 0                      ; a0 = t5 = y-pos : put the array number in reg a0
     addi a1, t6, 0                      ; a1 = t6 : put the generated array in reg a1
     call set_gsa_inversed
     addi t4, zero, N_GSA_COLUMNS - 1    ; t4 = 11 : reset pixel counter
     addi t6, zero, 0                    ; t6 = 0 : reset the generated array
     addi t5, t5, 1                      ; t5 += 1 : next array
-    bne t5, t2, generate_pixel          ; evaluate if generate pixel, i.e. if t5 != N_GSA_LINES
+    bne t5, t2, generate_pixel_UG          ; evaluate if generate pixel, i.e. if t5 != N_GSA_LINES
     jmpi invert_gsa_id
 
 set_gsa_inversed:
     ldw t0, GSA_ID(zero)            ; t0 = load the current gsa_id
     beq t0, zero, set_inversed_id1  ; jump to set_inversed_id1 if GSA_ID = 0
 set_inversed_id0:
-    sll t0, a0, 2                   ; t0 = a0 * 4 
+    slli t0, a0, 2                   ; t0 = a0 * 4 
     stw a1, GSA0(t0)                ; MEM(a0 * 4 + GSA0) = a1 
     jmpi end_set_gsa_inversed
 set_inversed_id1:
-    sll t0, a0, 2                   ; t0 = a0 * 4 
+    slli t0, a0, 2                   ; t0 = a0 * 4 
     stw a1, GSA1(t0)                ; MEM(a0 * 4 + GSA1) = a1
 end_set_gsa_inversed: 
     ret
@@ -699,7 +745,7 @@ invert_gsa_id:
     stw t0, GSA_ID(zero)
     jmpi retrieve_address
 
-save_stack:
+save_stack_UG:
     addi sp, sp, -32       ; sp -= 32 : prepare for pushing eight words
     stw t0, 28(sp) 
     stw t1, 24(sp)   
@@ -710,7 +756,7 @@ save_stack:
     stw t6, 4(sp)  
     stw t7, 0(sp)
     ret
-retrieve_stack:
+retrieve_stack_UG:
     ldw t7, 0(sp)
     ldw t6, 4(sp)
     ldw t5, 8(sp)
@@ -743,60 +789,80 @@ end_update_gsa:
 get_gsa:
     ldw t0, GSA_ID(zero)
     andi a0, a0, 7              ;does a modulo 8
-    bne t0, zero, gamesa1_1
     slli a0, a0, 2              ;do y*4 to get a valid address
+    bne t0, zero, gamesa1_1
     ldw v0, GSA0(a0)
-    jmpi end
+    jmpi end_GG
     gamesa1_1:
         ldw v0, GSA1(a0)
-    end:
+    end_GG:
     ret
 ; END:get_gsa
 
 ; BEGIN:set_gsa
 set_gsa:
     ldw t0, GSA_ID(zero)
-    bne t0, zero, gamesa1_2
     slli a1, a1, 2              ;do y*4 to get a valid address
+    andi a0, a0, 4095           ;do a mask to get only the 12 LSB's
+    bne t0, zero, gamesa1_2
     stw a0, GSA0(a1)
-    jmpi end
+    jmpi end_SG
     gamesa1_2:
         stw a0, GSA1(a1)
-    end:
+    end_SG:
     
     ret
 ; END:set_gsa
 
-; BEGIN:set_pixel
-set_pixel:
-    ;GSA[y][x] = LEDS[checkmod][y + 8*(xmod4)]
-    addi t5, zero, 0
-    
-    ret
-; END:set_pixel
-
 ; BEGIN:draw_gsa
 draw_gsa:
 
+    addi sp, sp, -4
+    stw ra, 0(sp)
     call clear_leds
-    addi t2, zero, N_GSA_LINES-1        ;max for y axis
-    addi a0, zero, 0                    ;argument for x
-    addi a1, zero, 0                    ;argument for y
-    addi t7, zero, 1                    ;mask
+    ldw ra, 0(sp)
+    addi sp, sp, 4
+
+    ;addi a0, zero, 0                    ;argument for x
+    ;addi a1, zero, 0                    ;argument for y
+    addi t2, zero, N_GSA_LINES          ;max for y axis
+    ;addi t7, zero, 1                    ;mask
     
     loop_draw_gsa1:                     ;iter lines
-        addi t1, zero, N_GSA_COLUMNS-1  ;max for x axis
-        add a0, t1, zero                ;put the value of the line in a0
+        addi t1, zero, N_GSA_COLUMNS    ;max for x axis
+        addi t2, t2, -1
+        add a0, zero, t2                ;put the value of the line in a0
         blt t2, zero, exit
+        addi sp, sp, -12
+        stw ra, 0(sp)
+        stw t1, 4(sp)
+        stw t2, 8(sp)
         call get_gsa                    ;gsa of line y in v0
+        ldw t2, 8(sp)
+        ldw t1, 4(sp)
+        ldw ra, 0(sp)
+        addi sp, sp, 12
         loop_draw_gsa2:                 ;iter columns
+            addi t1, t1, -1
             srl t3, v0, t1              ;shift right to get the bit in LSB
-            and t3, t3, t7              ;apply mask to get only LSB
+            andi t3, t3, 1              ;apply mask to get only LSB
+
             add a0, t1, zero            ;put the column value in a0
             add a1, t2, zero            ;put the line value in a1
-            bne t3, zero, set_pixel     ;set pixel if the LSB is 1
-            addi t1, t1, -1             ;decrement by 1
-            blt t1, zero, loop_draw_gsa1;check if not out of bounds
+
+            beq t3, zero, pixelNotOn_DG     ;set pixel if the LSB is 1
+
+            stw ra, 0(sp)
+            stw t1, 4(sp)
+            stw t2, 8(sp)
+            call set_pixel                    ;gsa of line y in v0
+            ldw t2, 8(sp)
+            ldw t1, 4(sp)
+            ldw ra, 0(sp)
+
+            pixelNotOn_DG:
+
+            beq t1, zero, loop_draw_gsa1;check if not out of bounds
             jmpi loop_draw_gsa2         ;jump if not yet complet
 
     exit:
