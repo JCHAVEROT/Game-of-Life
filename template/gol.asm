@@ -447,21 +447,23 @@ update_state:
     ldw t1, CURR_STATE(zero)    ;get the current state
     addi t2, zero, 0            ;iter to compare game state
     bne t1, t2, notInit_US
-    addi t2, zero, N_SEEDS      ;to check if b0=N
-    ;ldw t3, SEED(zero)          ;get the seed number
     andi t0, a0, 1               ;check if b0 is pressed
     beq t0, zero, notPressed_US
     
     addi sp, sp, -4
     stw ra, 0(sp)
-    call increment_seed     ;NOT FINISHED-------------------
+    call increment_seed         ;increment seed if b0 is pressed
     ldw ra, 0(sp)
     addi sp, sp, 4
 
-    ;addi t3, t3, 1              ;incremented seed by 1 since b0 was pressed
-    bne t3, t2, exit_US
+    addi t2, zero, N_SEEDS      ;to check if b0=N
+    ldw t3, SEED(zero)          ;get the seed number
+
+    bne t3, t2, exit_US         ;if b0 != N then do nothing
     addi t1, t1, 1              ;b0=N, state INIT=0 goes to state RAND=1
     stw t1, CURR_STATE(zero)    ;store the new current state
+    addi t1, zero, RUNNING      ;put RUNNING in t0
+    stw t1, PAUSE(zero)         ;store the value RUNNING in PAUSE
     jmpi exit_US
     notPressed_US:
         andi t0, a0, 2           ;check if b1 is pressed
