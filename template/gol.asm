@@ -462,13 +462,13 @@ update_state:
     bne t3, t2, exit_US         ;if b0 != N then do nothing
     addi t1, t1, 1              ;b0=N, state INIT=0 goes to state RAND=1
     stw t1, CURR_STATE(zero)    ;store the new current state
-    addi t1, zero, RUNNING      ;put RUNNING in t0
-    stw t1, PAUSE(zero)         ;store the value RUNNING in PAUSE
     jmpi exit_US
     notPressed_US:
-        andi t0, a0, 2           ;check if b1 is pressed
-        beq t0, zero, exit_US   ;if not pressed, then do nothimg
-        addi t1, zero, 2          ;b1 is pressed, state INIT=0 goes to state RUN=2
+        andi t0, a0, 2              ;check if b1 is pressed
+        beq t0, zero, exit_US       ;if not pressed, then do nothimg
+        addi t1, zero, 2            ;b1 is pressed, state INIT=0 goes to state RUN=2
+        addi t1, zero, RUNNING      ;put RUNNING in t0
+        stw t1, PAUSE(zero)         ;store the value RUNNING in PAUSE
         jmpi exit_US
     notInit_US:
         addi t2, t2, 1         ;iter to compare game state    
@@ -477,6 +477,8 @@ update_state:
         beq t0, zero, exit_US
         addi t1, t1, 1          ;b1 is pressed, state RAND=1 goes to state RUN=2
         stw t1, CURR_STATE(zero);store the new current state
+        addi t1, zero, RUNNING      ;put RUNNING in t0
+        stw t1, PAUSE(zero)         ;store the value RUNNING in PAUSE
         jmpi exit_US
     runState_US:
         ldw t2, CURR_STEP(zero) ;load the current step
