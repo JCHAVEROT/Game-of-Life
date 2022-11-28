@@ -819,6 +819,27 @@ mask:
     ret
 ; END:mask
 
+; BEGIN:get_input
+get_input:
+    ldw v0, BUTTONS+4(zero)     ;fetch information in the edgecapture register
+    addi t0, zero, 0            ;iter
+    addi t1, zero, 5            ;t1=5 for break condition
+    loop_GI:
+        srl t2, v0, t0          ;shift the edgecapture by t0 amount
+        andi t2, t2, 1          ;keep the LSB
+        bne t2, zero, end_GI    ;exit when LSB of t2 is 1
+        addi t0, t0, 1          ;increment iter
+        bne t0, t1, loop_GI
+
+    end_GI:
+        srl v0, v0, t0          ;shift right to get the t0-th button in the LSB
+        andi v0, v0, 1          ;mask all the other bits
+        sll v0, v0, t0          ;shift back the bit to the right button
+    
+    stw zero, BUTTONS+4(zero)   ;store 0's in the edgecapture register        
+    ret
+;END:get_input
+
 ; --------------------------------------------- SEB
 ;; BEGIN:wait
 ;wait: 
