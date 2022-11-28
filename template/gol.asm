@@ -777,6 +777,46 @@ end_update_gsa:
     ret
 ; END:update_gsa
 
+; BEGIN:mask
+mask:
+    ldw t0, SEED(zero)          ;get the seed to select the mask
+    slli t0, t0, 2              ;alignement to get the word
+    ldw s1, MASKS(t0)           ;get the mask
+    addi s0, zero, 0            ;iter
+    loop_M:
+        add a0, zero, s0        ; put line in a0
+
+        addi sp, sp, -12
+        stw s1, 8(sp)
+        stw s0, 4(sp)
+        stw ra, 0(sp)
+        call get_gsa
+        ldw ra, 0(sp)
+        ldw s0, 4(sp)
+        ldw s1, 8(sp)
+        addi sp, sp, 12
+
+        ldw a0, 0(s1)           ;put the mask line in a0
+        and a0, a0, v0          ;apply mask to the line got from get_gsa
+        add a1, zero, s0        ;the line number
+
+        addi sp, sp, -12
+        stw s1, 8(sp)
+        stw s0, 4(sp)
+        stw ra, 0(sp)
+        call set_gsa
+        ldw ra, 0(sp)
+        ldw s0, 4(sp)
+        ldw s1, 8(sp)
+        addi sp, sp, 12
+
+        addi s1, s1, 4          ;get next mask
+        addi s0, s0, 1          ;increment iter
+        addi t2, zero, N_GSA_LINES  ;t2=7 for break condition
+        bne s0, t2, loop_M
+    ret
+; END:mask
+
 ; --------------------------------------------- SEB
 ;; BEGIN:wait
 ;wait: 
