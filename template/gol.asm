@@ -433,15 +433,16 @@ state_init:
     beq t0, t7, set_random_gsa
     slli t0, t0, 2              ; t0 *= 4 : shift left logical by 2 of the seed number to have a valid address
     add t5, t5, t0              ; t5 = get the address of the particular seed in use
+    ldw t5, 0(t5)
     jmpi copy_seed
 next_seed:
     addi t4, t4, 1          ; t4 += 1 : next line in the GSA
     beq t4, t3, end_increment_seed
 copy_seed:
-    addi a0, t4, 0          ; a0 = t4 : put the array number in reg a0
+    addi a1, t4, 0          ; a0 = t4 : put the array number in reg a0
     slli t7, t4, 2          ; t7 = t4 * 4 : sll by 2 of t4 to have a valid address
     add t7, t7, t5          ; t7 = t7 + t5 : address of the t4-th seed
-    addi a1, t7, 0          ; a1 = t7 : put the retrieved seed in reg a1
+    ldw a0, 0(t7)           ; a1 = MEM(t7) : put the retrieved seed in reg a1
     call save_stack_IS
     call set_gsa
     call retrieve_stack_IS
@@ -486,23 +487,18 @@ update_state:
     andi t0, a0, 1               ;check if b0 is pressed
     beq t0, zero, notPressed_US
     
-    addi sp, sp, -4
-    stw ra, 0(sp)
-    call increment_seed         ;increment seed if b0 is pressed
-    ldw ra, 0(sp)
-    addi sp, sp, 4
-
     addi t2, zero, N_SEEDS      ;to check if b0=N
     ldw t3, SEED(zero)          ;get the seed number
 
     bne t3, t2, exit_US         ;if b0 != N then do nothing
-    addi t1, t1, 1              ;b0=N, state INIT=0 goes to state RAND=1
+    addi t1, zero, 1            ;b0=N, state INIT=0 goes to state RAND=1
     stw t1, CURR_STATE(zero)    ;store the new current state
     jmpi exit_US
     notPressed_US:
         andi t0, a0, 2              ;check if b1 is pressed
         beq t0, zero, exit_US       ;if not pressed, then do nothimg
         addi t1, zero, 2            ;b1 is pressed, state INIT=0 goes to state RUN=2
+        stw t1, CURR_STATE(zero)    
         addi t1, zero, RUNNING      ;put RUNNING in t0
         stw t1, PAUSE(zero)         ;store the value RUNNING in PAUSE
         jmpi exit_US
@@ -522,6 +518,7 @@ update_state:
         andi t0, a0, 8           ;check if b3 is pressed
         beq t0, zero, exit_US
         addi t1, zero, 0        ;b3 is pressed, state RUN=2 goes to state INIT=0
+        stw t1, CURR_STATE(zero)
         addi sp, sp, -4         ;make space for the return address
         stw ra, 0(sp)           ;put on the stack the return value
         call reset_game
@@ -530,6 +527,7 @@ update_state:
         jmpi exit_US
         endSteps_US:
             addi t1, zero, 0    ;no more steps, state RUN=2 goes to state INIT=0
+            stw zero, CURR_STATE(zero)
             addi sp, sp, -4         ;make space for the return address
             stw ra, 0(sp)           ;put on the stack the return value
             call reset_game
@@ -538,7 +536,6 @@ update_state:
             jmpi exit_US
 
     exit_US:
-
     ret
 ; END:update_state
 
@@ -635,9 +632,9 @@ end_select_action:
 
 ; BEGIN:cell_fate
 cell_fate:
-    bne a1, zero, isAlive_CF        ;the cell is alive
     addi t0, zero, 3                ;put 3 in register t0
     addi t1, zero, 2                ;put 2 in register t1
+    bne a1, zero, isAlive_CF        ;the cell is alive
     bne a0, t0, exit_CF             ;check if population is equal to 3
     addi v0, zero, 1                ;cell was dead and has exactly 3 live neighbors, so becomes alive
     jmpi exit_CF
@@ -704,17 +701,17 @@ find_neighbours:
     iterX_FN:
         srl t5, t0, t4
         andi t5, t5, 1
-        bne t5, zero, incrNeigh1_FN
+        beq t5, zero, incrNeigh1_FN
         addi v0, v0, 1
         incrNeigh1_FN:
         srl t5, t1, t4
         andi t5, t5, 1
-        bne t5, zero, incrNeigh2_FN
+        beq t5, zero, incrNeigh2_FN
         addi v0, v0, 1
         incrNeigh2_FN:
         srl t5, t2, t4
         andi t5, t5, 1
-        bne t5, zero, incrNeigh3_FN
+        beq t5, zero, incrNeigh3_FN
         addi v0, v0, 1
         incrNeigh3_FN:
         addi t3, t3, -1
@@ -730,6 +727,114 @@ find_neighbours:
     exit_FN:
     ret
 ; END:find_neighbours
+
+; BEGIN:find_neighbours
+find_neighbours:
+    ;a0=x a1=y
+    addi s0, zero, -2           ;iter for x
+    addi s1, zero, -2           ;iter for y
+    ;addi t2, zero, 1            ;breakpoint for x and y
+    addi s3, zero, 0            ;counter for neighbors
+    loopY_FN:
+        addi s1, s1, 1          ;increment y
+        addi t0, zero, 1            ;breakpoint for x and y
+        beq s0, t0, end_FN
+
+        loopX_FN:
+            ;if s0=0 and s1=0 then dont do loop
+            bne s0, zero, continue_FN
+            beq s1, zero, loopY_FN
+            continue_FN:
+
+            addi s0, s0, 1      ;increment x
+            add t1, a0, s0      ;t1 = x + s0 mod 12
+            ;if t1=-1 then t2=11
+            addi t3, zero, -1
+            beq t1, t3, minusOne_FN
+
+            addi t2, zero, 0    ;incr for mod12
+            addi t4, zero, N_GSA_COLUMNS
+            jmpi loopMod12_cond
+            loopMod12:
+                sub t1, t1, t4      ;valid x-coord in t1
+                addi t2, t2, 1
+            loopMod12_cond:
+                bge t1, t4, loopMod12
+                jmpi endLoopMod12
+            
+            minusOne_FN:
+                addi t2, zero, 11
+            
+            endLoopMod12:
+            
+            ;AAA keep t1, s0, s1
+            add t6, a1, s1          ;t6 = y + s1 mod 8
+            andi t6, t6, 7          ;mod8
+
+            addi sp, sp, -32
+            stw ra, 28(sp)
+            stw s3, 24(sp)
+            stw a0, 20(sp)
+            stw a1, 16(sp)
+            stw s0, 12(sp)
+            stw s1, 8(sp)
+            stw t1, 4(sp)
+            stw t6, 0(sp)
+
+            add a0, zero, t6        ;line y for get_gsa
+            call get_gsa
+            ldw t6, 0(sp)
+            ldw t1, 4(sp)
+            ldw s1, 8(sp)
+            ldw s0, 12(sp)
+            ldw a1, 16(sp)
+            ldw a0, 20(sp)
+            ldw s3, 24(sp)
+            ldw ra, 28(sp)
+
+            srl v0, v0, t1
+            andi v0, v0, 1
+            beq v0, zero, notAlive_FN
+            addi s3, s3, 1
+            notAlive_FN:
+
+            addi t0, zero, 1            ;breakpoint for x and y
+            beq s0, t0, loopY_FN
+            jmpi loopX_FN
+
+    addi sp, sp, -16
+    stw ra, 12(sp)
+    stw s3, 8(sp)
+    stw a0, 4(sp)
+    stw a1, 0(sp)
+    call get_gsa
+    ldw a1, 0(sp)
+    ldw a0, 4(sp)
+    ldw s3, 8(sp)
+    ldw ra, 12(sp)
+
+    srl t7, v0, a0                  ;examined cell in LSB
+    andi t7, t7, 1                  ;mask rest of bits
+
+    addi sp, sp, -16
+    stw ra, 12(sp)
+    stw s3, 8(sp)
+    stw a0, 4(sp)
+    stw a1, 0(sp)
+    add a0, zero, s3
+    add a1, zero, t7
+    call cell_fate
+    ldw a1, 0(sp)
+    ldw a0, 4(sp)
+    ldw s3, 8(sp)
+    ldw ra, 12(sp)
+
+    add v1, zero, v0
+    add v0, zero, s3
+
+    end_FN:
+    ret
+;END:find_neighbours
 
 ; BEGIN:update_gsa
 update_gsa:
@@ -826,7 +931,7 @@ end_update_gsa:
 mask:
     ldw t0, SEED(zero)          ;get the seed to select the mask
     slli t0, t0, 2              ;alignement to get the word
-    ldw s1, MASKS(t0)           ;get the mask
+    ldw s1, MASKS(t0)               ;get the mask
     addi s0, zero, 0            ;iter
     loop_M:
         add a0, zero, s0        ; put line in a0
@@ -857,7 +962,7 @@ mask:
 
         addi s1, s1, 4          ;get next mask
         addi s0, s0, 1          ;increment iter
-        addi t2, zero, N_GSA_LINES  ;t2=7 for break condition
+        addi t2, zero, N_GSA_LINES  ;t2=8 for break condition
         bne s0, t2, loop_M
     ret
 ; END:mask
@@ -881,9 +986,9 @@ get_input:
     
     stw zero, BUTTONS+4(zero)   ;store 0's in the edgecapture register        
     ret
-;END:get_input
+; END:get_input
 
-;BEGIN:decrement_step
+; BEGIN:decrement_step
 decrement_step:
     ldw t0, CURR_STATE(zero)    ;get the current state
     ldw t1, PAUSE(zero)         ;get the value to see if the game is paused
@@ -917,7 +1022,7 @@ decrement_step:
     exit_DS:
 
     ret
-;END:decrement_step
+; END:decrement_step
 
 ; BEGIN:reset_game
 reset_game:
@@ -951,4 +1056,4 @@ reset_game:
     stw t0, SPEED(zero)         ;set game speed to 0
 
     ret
-;END:reset_game
+; END:reset_game
