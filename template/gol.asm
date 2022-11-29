@@ -866,7 +866,7 @@ decrement_step:
         srl t4, t2, t3      ;shift the 4 bits in the LSB's
         andi t4, t4, 15     ;keep only the 4 LSB's
         slli t4, t4, 4      ;make the number word aligned
-        addi t6, zero, font_data(t4)    ;store the font data in t6
+        ldw t6, font_data(t4)    ;store the font data in t6
         add t7, zero, t5    ;make word aligned for SevenSegs
         stw t6, SEVEN_SEGS(t7);store the fontdata in the corresponding SevenSegs
         bne t5, zero, displaySevenSegs_DS
@@ -875,6 +875,8 @@ decrement_step:
 
     ret
 ;END:decrement_step
+
+
 
 ; --------------------------------------------- SEB
 ;; BEGIN:wait
