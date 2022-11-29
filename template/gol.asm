@@ -840,6 +840,42 @@ get_input:
     ret
 ;END:get_input
 
+;BEGIN:decrement_step
+decrement_step:
+    ldw t0, CURR_STATE(zero)    ;get the current state
+    ldw t1, PAUSE(zero)         ;get the value to see if the game is paused
+    ldw t2, CURR_STEP(zero)     ;get the current step
+    ;if curr_state==RUN and pause==RUNNING and curr_step==0
+    addi t3, zero, RUN          ;condition RUN
+    addi t4, zero, RUNNING      ;condition RUNNING
+    addi t5, zero, 4            ;breakpoint for loop in else_DS
+    bne t0, t3, else2_DS        ;if the curr_state is not RUN then must not decrement step
+    bne t1, t4, else_DS
+    bne t2, zero, else_DS
+    addi v0, zero, 1            ;if all conditions are True, then return 1 in v0
+    jmpi exit_DS
+    else_DS:
+        addi t2, t2, -1         ;decrement step
+        stw t2, CURR_STEP(zero) ;store in current_step
+        addi t3, zero, 0        ;for the shift of the current step
+        jmpi displaySevenSegs_DS
+    else2_DS:
+        
+    displaySevenSegs_DS:
+        addi t5, t5, -1
+        srl t4, t2, t3      ;shift the 4 bits in the LSB's
+        andi t4, t4, 15     ;keep only the 4 LSB's
+        slli t4, t4, 4      ;make the number word aligned
+        addi t6, zero, font_data(t4)    ;store the font data in t6
+        add t7, zero, t5    ;make word aligned for SevenSegs
+        stw t6, SEVEN_SEGS(t7);store the fontdata in the corresponding SevenSegs
+        bne t5, zero, displaySevenSegs_DS
+
+    exit_DS:
+
+    ret
+;END:decrement_step
+
 ; --------------------------------------------- SEB
 ;; BEGIN:wait
 ;wait: 
