@@ -876,7 +876,39 @@ decrement_step:
     ret
 ;END:decrement_step
 
+; BEGIN:reset_game
+reset_game:
+    addi t0, zero, 1
+    stw t0, CURR_STEP(zero)     ;set current step to 1
+    addi t0, zero, 0            ;display 0001 on seven segs
+    ldw t1, font_data(zero)     ;store the font for 0
+    stw t1, SEVEN_SEGS(t0)      ;display 0 on 0th display
+    addi t0, t0, 4              ;word aligne
+    stw t1, SEVEN_SEGS(t0)      ;display 0 on 1th display
+    addi t0, t0, 4              
+    stw t1, SEVEN_SEGS(t0)      ;display 0 on 2th display
+    addi t1, zero, 4            ;to store the 1 font
+    ldw t1, font_data(t1)       ;fetch the font of 1
+    addi t0, t0, 4
+    stw t1, SEVEN_SEGS(t0)
 
+    addi t0, zero, -1
+    stw t0, SEED(zero)          ;store -1 in the seed
+    addi sp, sp, -4
+    stw ra, 0(sp)
+    call increment_seed         ;increment seed to give us the seed0
+    ldw ra, 0(sp)
+    addi sp, sp, 4
+
+    stw zero, CURR_STATE(zero)  ;reset game state to 0
+    stw zero, GSA_ID(zero)      ;reset GSA ID
+    addi t0, zero, PAUSED
+    stw t0, PAUSE(zero)         ;store isPaused in PAUSE
+    addi t0, zero, MIN_SPEED
+    stw t0, SPEED(zero)         ;set game speed to 0
+
+    ret
+;END:reset_game
 
 ; --------------------------------------------- SEB
 ;; BEGIN:wait
