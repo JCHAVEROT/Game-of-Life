@@ -30,21 +30,6 @@
 
 main:
     ;; TODO
-    addi t0, zero, 1
-	addi t1, zero, 0xFF
-	stw t0, GSA_ID(zero)
-	stw t1, GSA1+12(zero)
-	addi a0, zero, 3
-    
-	call get_gsa
-
-    add t0, zero, zero
-	stw t0, GSA_ID(zero)
-	addi t1, zero, 57
-	addi a0, zero, 3
-	slli t2, a0, 2
-	stw t1, GSA0(t2)
-	call get_gsa
 
 
 
@@ -170,13 +155,6 @@ MASKS:
     .word mask3
     .word mask4
 
-
-; BEGIN:procedure_name
-procedure_name:
-    ; your implementation code
-    ret
-; END:procedure_name
-
 ; BEGIN:clear_leds
 clear_leds:
     stw zero, LEDS(zero)
@@ -218,32 +196,90 @@ loop2:
     ret
 ; END:wait
 
-; --------------------------------------------- JEREMY
-
-
-;get_gsa:
-    ;ldw t0, GSA_ID(zero)
-    ;sll t1, a0, 2                     ; t1 = a0 * 4 
-    ;ldw v0, GSA0(t1)                  ; v0 = MEM(a0 * 4 + GSA0)
-    ;beq t0, zero, end_get_gsa         ; end if GSA_ID = 0
-    ;ldw v0, GSA1(t1)                  ; v0 = MEM(a0 * 4 + GSA1)
-;end_get_gsa: 
-    ;ret
+; BEGIN:get_gsa
+get_gsa:
+    ldw t0, GSA_ID(zero)
+    andi a0, a0, 7              ;does a modulo 8
+    slli a0, a0, 2              ;do y*4 to get a valid address
+    bne t0, zero, gamesa1_1
+    ldw v0, GSA0(a0)
+    jmpi end_GG
+    gamesa1_1:
+        ldw v0, GSA1(a0)
+    end_GG:
+    ret
+; END:get_gsa
 
 ; BEGIN:set_gsa
 set_gsa:
     ldw t0, GSA_ID(zero)
-    bne t0, zero, set_id1         ; jump to set_id1 if GSA_ID = 1
-set_id0:
-    slli t0, a0, 2                ; t0 = a0 * 4 
-    stw a1, GSA0(t0)              ; MEM(a0 * 4 + GSA0) = a1 
-    jmpi end_set_gsa
-set_id1:
-    slli t0, a0, 2                ; t0 = a0 * 4 
-    stw a1, GSA1(t0)              ; MEM(a0 * 4 + GSA1) = a1
-end_set_gsa: 
+    slli a1, a1, 2              ;do y*4 to get a valid address
+    andi a0, a0, 4095           ;do a mask to get only the 12 LSB's
+    bne t0, zero, gamesa1_2
+    stw a0, GSA0(a1)
+    jmpi end_SG
+    gamesa1_2:
+        stw a0, GSA1(a1)
+    end_SG:
+    
     ret
 ; END:set_gsa
+
+; BEGIN:draw_gsa
+draw_gsa:
+
+    addi sp, sp, -4
+    stw ra, 0(sp)
+    call clear_leds
+    ldw ra, 0(sp)
+    addi sp, sp, 4
+
+    ;addi a0, zero, 0                    ;argument for x
+    ;addi a1, zero, 0                    ;argument for y
+    addi t2, zero, N_GSA_LINES          ;max for y axis
+    ;addi t7, zero, 1                    ;mask
+    
+    loop_draw_gsa1:                     ;iter lines
+        addi t1, zero, N_GSA_COLUMNS    ;max for x axis
+        addi t2, t2, -1
+        add a0, zero, t2                ;put the value of the line in a0
+        blt t2, zero, exit
+        addi sp, sp, -12
+        stw ra, 0(sp)
+        stw t1, 4(sp)
+        stw t2, 8(sp)
+        call get_gsa                    ;gsa of line y in v0
+        ldw t2, 8(sp)
+        ldw t1, 4(sp)
+        ldw ra, 0(sp)
+        addi sp, sp, 12
+        loop_draw_gsa2:                 ;iter columns
+            addi t1, t1, -1
+            srl t3, v0, t1              ;shift right to get the bit in LSB
+            andi t3, t3, 1              ;apply mask to get only LSB
+
+            add a0, t1, zero            ;put the column value in a0
+            add a1, t2, zero            ;put the line value in a1
+
+            beq t3, zero, pixelNotOn_DG     ;set pixel if the LSB is 1
+
+            stw ra, 0(sp)
+            stw t1, 4(sp)
+            stw t2, 8(sp)
+            call set_pixel                    ;gsa of line y in v0
+            ldw t2, 8(sp)
+            ldw t1, 4(sp)
+            ldw ra, 0(sp)
+
+            pixelNotOn_DG:
+
+            beq t1, zero, loop_draw_gsa1;check if not out of bounds
+            jmpi loop_draw_gsa2         ;jump if not yet complet
+
+    exit:
+
+    ret
+; END:draw_gsa
 
 ; BEGIN:random_gsa
 random_gsa:
@@ -909,98 +945,3 @@ reset_game:
 
     ret
 ;END:reset_game
-
-; --------------------------------------------- SEB
-;; BEGIN:wait
-;wait: 
-;    addi t0, zero, 0x80000
-;    loop:
-;        addi t0, t0, -1
-;        bne t0, zero, loop
-;    ret
-;; END:wait
-
-; BEGIN:get_gsa
-get_gsa:
-    ldw t0, GSA_ID(zero)
-    andi a0, a0, 7              ;does a modulo 8
-    slli a0, a0, 2              ;do y*4 to get a valid address
-    bne t0, zero, gamesa1_1
-    ldw v0, GSA0(a0)
-    jmpi end_GG
-    gamesa1_1:
-        ldw v0, GSA1(a0)
-    end_GG:
-    ret
-; END:get_gsa
-
-; BEGIN:set_gsa
-set_gsa:
-    ldw t0, GSA_ID(zero)
-    slli a1, a1, 2              ;do y*4 to get a valid address
-    andi a0, a0, 4095           ;do a mask to get only the 12 LSB's
-    bne t0, zero, gamesa1_2
-    stw a0, GSA0(a1)
-    jmpi end_SG
-    gamesa1_2:
-        stw a0, GSA1(a1)
-    end_SG:
-    
-    ret
-; END:set_gsa
-
-; BEGIN:draw_gsa
-draw_gsa:
-
-    addi sp, sp, -4
-    stw ra, 0(sp)
-    call clear_leds
-    ldw ra, 0(sp)
-    addi sp, sp, 4
-
-    ;addi a0, zero, 0                    ;argument for x
-    ;addi a1, zero, 0                    ;argument for y
-    addi t2, zero, N_GSA_LINES          ;max for y axis
-    ;addi t7, zero, 1                    ;mask
-    
-    loop_draw_gsa1:                     ;iter lines
-        addi t1, zero, N_GSA_COLUMNS    ;max for x axis
-        addi t2, t2, -1
-        add a0, zero, t2                ;put the value of the line in a0
-        blt t2, zero, exit
-        addi sp, sp, -12
-        stw ra, 0(sp)
-        stw t1, 4(sp)
-        stw t2, 8(sp)
-        call get_gsa                    ;gsa of line y in v0
-        ldw t2, 8(sp)
-        ldw t1, 4(sp)
-        ldw ra, 0(sp)
-        addi sp, sp, 12
-        loop_draw_gsa2:                 ;iter columns
-            addi t1, t1, -1
-            srl t3, v0, t1              ;shift right to get the bit in LSB
-            andi t3, t3, 1              ;apply mask to get only LSB
-
-            add a0, t1, zero            ;put the column value in a0
-            add a1, t2, zero            ;put the line value in a1
-
-            beq t3, zero, pixelNotOn_DG     ;set pixel if the LSB is 1
-
-            stw ra, 0(sp)
-            stw t1, 4(sp)
-            stw t2, 8(sp)
-            call set_pixel                    ;gsa of line y in v0
-            ldw t2, 8(sp)
-            ldw t1, 4(sp)
-            ldw ra, 0(sp)
-
-            pixelNotOn_DG:
-
-            beq t1, zero, loop_draw_gsa1;check if not out of bounds
-            jmpi loop_draw_gsa2         ;jump if not yet complet
-
-    exit:
-
-    ret
-; END:draw_gsa
