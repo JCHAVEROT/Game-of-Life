@@ -565,10 +565,16 @@ retrieve_buttons:
     ret
 select_init_rand:               ; if current state is init state or random state
     call retrieve_buttons
-    bne t0, t5, but234_init_rand
+but0_init_rand:
+    bne t0, t5, but234_init_rand_check
     call save_stack_SA
     call increment_seed         ; call increment_seed if button 0 is pressed
     call retrieve_stack_SA
+but234_init_rand_check:
+    beq t2, t5, but234_init_rand
+    beq t3, t5, but234_init_rand
+    beq t4, t5, but234_init_rand
+    jmpi end_select_action
 but234_init_rand:
     add a0, zero, t4
     add a1, zero, t3
@@ -577,25 +583,26 @@ but234_init_rand:
     jmpi end_select_action    
 select_run:                     ; if current state is run state
     call retrieve_buttons
-    bne t0, t5, but1_run
+but0_run:
+    bne t0, t5, but1_run        ; if b0=1 then pause_game
     call save_stack_SA
     call pause_game
     call retrieve_stack_SA
 but1_run:
-    bne t1, t5, but2_run
+    bne t1, t5, but2_run        ; if b1=1 then change_speed(0)
     addi a0, zero, 0
     call save_stack_SA
     call change_speed
     call retrieve_stack_SA
 but2_run:
-    bne t2, t5, but4_run
+    bne t2, t5, but4_run        ; if b2=1 then change_speed(1)
     addi a0, zero, 1
     call save_stack_SA
     call change_speed
     call retrieve_stack_SA
 but4_run:
-    bne t4, t5, but4_run
-    call increment_seed 
+    bne t4, t5, end_select_action   ; if b4=1 then random_gsa
+    call random_gsa
     jmpi end_select_action
 
 save_stack_SA:
