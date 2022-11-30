@@ -788,9 +788,10 @@ update_gsa:
     addi t4, zero, N_GSA_COLUMNS - 1    ; t4 = x-pos (we run the array backwards)
     addi t5, zero, 0                    ; t5 = y-pos
     addi t6, zero, 0                    ; t6 = the new array
+    jmpi generate_pixel_UG
 
 next_pixel_UG:
-    addi t4, t4, -1             ; t4 += 1 : next pixel
+    addi t4, t4, -1                ; t4 -= 1 : next pixel
     blt t4, zero, next_array_UG    ; evaluate if next array, i.e. if t4 < 0
 generate_pixel_UG:
     addi a0, t4, 0          ; put in the right registers the coordinates
@@ -811,7 +812,7 @@ next_array_UG:
     addi t4, zero, N_GSA_COLUMNS - 1    ; t4 = 11 : reset pixel counter
     addi t6, zero, 0                    ; t6 = 0 : reset the generated array
     addi t5, t5, 1                      ; t5 += 1 : next array
-    bne t5, t2, generate_pixel_UG          ; evaluate if generate pixel, i.e. if t5 != N_GSA_LINES
+    bne t5, t2, generate_pixel_UG       ; evaluate if generate pixel, i.e. if t5 != N_GSA_LINES
     jmpi invert_gsa_id
 
 set_gsa_inversed:
@@ -832,7 +833,7 @@ invert_gsa_id:
     ldw t0, GSA_ID(zero)    ; t0 = load the current gsa_id
     addi t7, zero, 1        ; t7 = 1 for the reference
     xor t7, t0, t7          ; invert the gsa_id
-    stw t0, GSA_ID(zero)
+    stw t7, GSA_ID(zero)
     jmpi retrieve_address
 
 save_stack_UG:
