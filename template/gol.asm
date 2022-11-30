@@ -209,7 +209,7 @@ wait:
 loop2:
     ldw t1, SPEED(zero)         ; decrement of the counter depends on the game speed
     sub t0, t0, t1
-    bne t0, zero, loop2
+    bge t0, zero, loop2
     ret
 ; END:wait
 
