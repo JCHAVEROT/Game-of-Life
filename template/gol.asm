@@ -575,13 +575,13 @@ select_action:
 retrieve_buttons:
     andi t0, a0, 1
     andi t1, a0, 2
-    slli t1, t1, 1
+    srli t1, t1, 1
     andi t2, a0, 4
-    slli t2, t2, 2
+    srli t2, t2, 2
     andi t3, a0, 8
-    slli t3, t3, 3
+    srli t3, t3, 3
     andi t4, a0, 16
-    slli t4, t4, 4
+    srli t4, t4, 4
     ret
 select_init_rand:               ; if current state is init state or random state
     call retrieve_buttons
