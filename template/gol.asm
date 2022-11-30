@@ -758,6 +758,7 @@ find_neighbours:
     stw s3, 8(sp)
     stw a0, 4(sp)
     stw a1, 0(sp)
+    add a0, zero, a1
     call get_gsa
     ldw a1, 0(sp)
     ldw a0, 4(sp)
