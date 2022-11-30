@@ -280,6 +280,7 @@ draw_gsa:
 
             beq t3, zero, pixelNotOn_DG     ;set pixel if the LSB is 1
 
+            addi sp, sp, -12
             stw ra, 0(sp)
             stw t1, 4(sp)
             stw t2, 8(sp)
@@ -287,6 +288,7 @@ draw_gsa:
             ldw t2, 8(sp)
             ldw t1, 4(sp)
             ldw ra, 0(sp)
+            addi sp, sp, 12
 
             pixelNotOn_DG:
 
