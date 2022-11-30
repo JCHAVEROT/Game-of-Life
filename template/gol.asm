@@ -28,9 +28,26 @@
     .equ PAUSED, 0x00
     .equ RUNNING, 0x01
 
-main:
-    ;; TODO
-
+main:                   ; while (true)
+    addi sp, zero, CUSTOM_VAR_END
+    call reset_game
+    call get_input
+    addi t0, v0, 0      ; t0 = 'e' variable
+    addi t1, zero, 0    ; t1 = 'done' variable
+game_loop:              ; while (!done)
+    addi a0, t0, 0
+    call select_action
+    call update_state
+    call update_gsa
+    call mask
+    call draw_gsa
+    call wait
+    call decrement_step
+    addi t1, v0, 0
+    call get_input
+    addi t0, v0, 0
+    beq t1, zero, game_loop
+beq zero, zero, main
 
 
 font_data:
@@ -439,10 +456,10 @@ next_seed:
     addi t4, t4, 1          ; t4 += 1 : next line in the GSA
     beq t4, t3, end_increment_seed
 copy_seed:
-    addi a1, t4, 0          ; a0 = t4 : put the array number in reg a0
+    addi a1, t4, 0          ; a1 = t4 : put the array number in reg a1
     slli t7, t4, 2          ; t7 = t4 * 4 : sll by 2 of t4 to have a valid address
     add t7, t7, t5          ; t7 = t7 + t5 : address of the t4-th seed
-    ldw a0, 0(t7)           ; a1 = MEM(t7) : put the retrieved seed in reg a1
+    ldw a0, 0(t7)           ; a0 = MEM(t7) : put the retrieved seed in reg a0
     call save_stack_IS
     call set_gsa
     call retrieve_stack_IS
@@ -653,117 +670,41 @@ cell_fate:
 
 ; BEGIN:find_neighbours
 find_neighbours:
-    addi sp, sp, -8                 ;make space on the stack
-    stw a0, 4(sp)                   ;store the x-coord
-    stw a1, 0(sp)                   ;store the y-coord
-    ;add a0, zero, a1                ;put the y-coord in a0
-    addi t0, zero, 1                ;iter over 3 lines
-    add t1, zero, a1                ;put y-coord in register t1
-    addi t2, zero, -2               ;for the break
-    loop_FN:
-        addi sp, sp, -16
-        stw t0, 12(sp)               ;put iter in stack
-        stw t1, 8(sp)               ;put y-coord in stack
-        stw t2, 4(sp)               ;put break point in stack
-        stw ra, 0(sp)               ;store the return address
-        add a0, t1, t0              ;line: y + t0
-        call get_gsa
-        ldw ra, 0(sp)
-        ldw t2, 4(sp)
-        ldw t1, 8(sp)
-        ldw t0, 12(sp)
-        addi sp, sp, 16
-        addi sp, sp, -4             
-        stw v0, 0(sp)               ;store the GSA of line y + t0
-        addi t0, t0, -1             ;decrease iter by 1
-        bne t0, t2, loop_FN         ;if iter != -2 then loop
-    ldw t0, 0(sp)                   ;GSA line: y-1
-    ldw t1, 4(sp)                   ;GSA line: y
-    ldw t2, 8(sp)                   ;GSA line: y+1
-    ldw a1, 12(sp)                  ;y-coord
-    ldw a0, 16(sp)                  ;x-coord
-    addi sp, sp, 20                 ;reset stack pointer
-
-    addi a0, a0, -1                 ;bring the x to minus one position
-
-    srl t0, t0, a0                  ;have the three coordinates at the 3 LSBs
-    andi t0, t0, 7                  ;mask the rest 
-    srl t1, t1, a0
-    andi t1, t1, 7
-    srl t2, t2, a0
-    andi t2, t2, 7
-
-    addi t3, zero, 3                ;iterator
-    addi t4, zero, 0                ;iterator for shifts
-    addi t5, zero, 0                ;to store the bit we are looking at
-    addi v0, zero, 0                ;counter for neighbors
-
-    iterX_FN:
-        srl t5, t0, t4
-        andi t5, t5, 1
-        beq t5, zero, incrNeigh1_FN
-        addi v0, v0, 1
-        incrNeigh1_FN:
-        srl t5, t1, t4
-        andi t5, t5, 1
-        beq t5, zero, incrNeigh2_FN
-        addi v0, v0, 1
-        incrNeigh2_FN:
-        srl t5, t2, t4
-        andi t5, t5, 1
-        beq t5, zero, incrNeigh3_FN
-        addi v0, v0, 1
-        incrNeigh3_FN:
-        addi t3, t3, -1
-        addi t4, t4, 1
-        bne t3, zero, iterX_FN
-
-    srli t5, t1, 1              ;get the value of the cell (x, y) to the LSB
-    andi t5, t5, 1              ;mask the rest
-    add v1, zero, t5            ;store if the cell is alive or not
-    addi t5, zero, 1              ;to compare if the cell is alive or not
-    bne v1, t5, exit_FN
-    addi v0, v0, -1            ;if the the cell is alive, must deduce by 1 to not count the target cell as a neighbor
-    exit_FN:
-    ret
-; END:find_neighbours
-
-; BEGIN:find_neighbours
-find_neighbours:
     ;a0=x a1=y
-    addi s0, zero, -2           ;iter for x
+    ;addi s0, zero, -2           ;iter for x
     addi s1, zero, -2           ;iter for y
     ;addi t2, zero, 1            ;breakpoint for x and y
     addi s3, zero, 0            ;counter for neighbors
     loopY_FN:
         addi s1, s1, 1          ;increment y
-        addi t0, zero, 1            ;breakpoint for x and y
-        beq s0, t0, end_FN
+        addi t0, zero, 2            ;breakpoint for y
+        addi s0, zero, -2
+        beq s1, t0, end_FN
 
         loopX_FN:
             ;if s0=0 and s1=0 then dont do loop
+            addi s0, s0, 1      ;increment x
             bne s0, zero, continue_FN
-            beq s1, zero, loopY_FN
+            beq s1, zero, isZeroZero
             continue_FN:
 
-            addi s0, s0, 1      ;increment x
             add t1, a0, s0      ;t1 = x + s0 mod 12
             ;if t1=-1 then t2=11
             addi t3, zero, -1
             beq t1, t3, minusOne_FN
 
-            addi t2, zero, 0    ;incr for mod12
+            ;addi t2, zero, 0    ;incr for mod12
             addi t4, zero, N_GSA_COLUMNS
             jmpi loopMod12_cond
             loopMod12:
                 sub t1, t1, t4      ;valid x-coord in t1
-                addi t2, t2, 1
+                ;addi t2, t2, 1
             loopMod12_cond:
                 bge t1, t4, loopMod12
                 jmpi endLoopMod12
             
             minusOne_FN:
-                addi t2, zero, 11
+                addi t1, zero, 11   ;if t1=-1 then 11
             
             endLoopMod12:
             
@@ -798,9 +739,13 @@ find_neighbours:
             addi s3, s3, 1
             notAlive_FN:
 
-            addi t0, zero, 1            ;breakpoint for x and y
+            isZeroZero:
+
+            addi t0, zero, 1            ;breakpoint for x
             beq s0, t0, loopY_FN
             jmpi loopX_FN
+
+    end_FN:
 
     addi sp, sp, -16
     stw ra, 12(sp)
@@ -816,25 +761,11 @@ find_neighbours:
     srl t7, v0, a0                  ;examined cell in LSB
     andi t7, t7, 1                  ;mask rest of bits
 
-    addi sp, sp, -16
-    stw ra, 12(sp)
-    stw s3, 8(sp)
-    stw a0, 4(sp)
-    stw a1, 0(sp)
-    add a0, zero, s3
-    add a1, zero, t7
-    call cell_fate
-    ldw a1, 0(sp)
-    ldw a0, 4(sp)
-    ldw s3, 8(sp)
-    ldw ra, 12(sp)
-
-    add v1, zero, v0
+    add v1, zero, t7
     add v0, zero, s3
 
-    end_FN:
     ret
-;END:find_neighbours
+; END:find_neighbours
 
 ; BEGIN:update_gsa
 update_gsa:
@@ -969,7 +900,7 @@ mask:
 
 ; BEGIN:get_input
 get_input:
-    ldw v0, BUTTONS+4(zero)     ;fetch information in the edgecapture register
+    ldw v0, BUTTONS+4(zero)     ;fetch information from the edgecapture register
     addi t0, zero, 0            ;iter
     addi t1, zero, 5            ;t1=5 for break condition
     loop_GI:
@@ -997,35 +928,36 @@ decrement_step:
     addi t3, zero, RUN          ;condition RUN
     addi t4, zero, RUNNING      ;condition RUNNING
     addi t5, zero, 4            ;breakpoint for loop in else_DS
-    bne t0, t3, else2_DS        ;if the curr_state is not RUN then must not decrement step
-    bne t1, t4, else_DS
+    bne t0, t3, displaySevenSegs_DS  ;if the curr_state is not RUN then must not decrement step
+    bne t1, t4, displaySevenSegs_DS  ;if game is paused then must not decrement step
     bne t2, zero, else_DS
     addi v0, zero, 1            ;if all conditions are True, then return 1 in v0
     jmpi exit_DS
-    else_DS:
+    else_DS:   
         addi t2, t2, -1         ;decrement step
         stw t2, CURR_STEP(zero) ;store in current_step
         addi t3, zero, 0        ;for the shift of the current step
-        jmpi displaySevenSegs_DS
-    else2_DS:
-        
+        addi v0, zero, 0        ; return 0
+        jmpi displaySevenSegs_DS 
     displaySevenSegs_DS:
-        addi t5, t5, -1
-        srl t4, t2, t3      ;shift the 4 bits in the LSB's
-        andi t4, t4, 15     ;keep only the 4 LSB's
-        slli t4, t4, 4      ;make the number word aligned
+        addi t5, t5, -1       
+        andi t4, t2, 15     ;keep only the 4 LSB's
+        slli t4, t4, 2      ;make the number word aligned  -- modified 4 -> 2
         ldw t6, font_data(t4)    ;store the font data in t6
-        add t7, zero, t5    ;make word aligned for SevenSegs
+        slli t7, t5, 2    ;make word aligned for SevenSegs
         stw t6, SEVEN_SEGS(t7);store the fontdata in the corresponding SevenSegs
+        srli t2, t2, 4      ;shift the 4 bits in the LSB's -- modified 
         bne t5, zero, displaySevenSegs_DS
 
     exit_DS:
-
     ret
 ; END:decrement_step
 
 ; BEGIN:reset_game
 reset_game:
+    addi sp, sp, -4
+    stw ra, 0(sp)
+
     addi t0, zero, 1
     stw t0, CURR_STEP(zero)     ;set current step to 1
     addi t0, zero, 0            ;display 0001 on seven segs
@@ -1040,20 +972,53 @@ reset_game:
     addi t0, t0, 4
     stw t1, SEVEN_SEGS(t0)
 
-    addi t0, zero, -1
-    stw t0, SEED(zero)          ;store -1 in the seed
-    addi sp, sp, -4
-    stw ra, 0(sp)
-    call increment_seed         ;increment seed to give us the seed0
-    ldw ra, 0(sp)
-    addi sp, sp, 4
+    addi t0, zero, 0
+    stw t0, SEED(zero)          ;store 0 in the seed
 
     stw zero, CURR_STATE(zero)  ;reset game state to 0
     stw zero, GSA_ID(zero)      ;reset GSA ID
+
+    addi t1, zero, N_GSA_LINES  ; t1 = number of lines in the GSA
+    addi t2, zero, 0            ; t2 = counter for the GSA lines when copy the seed in state_init
+    ldw t3, SEEDS(zero)         ; t3 = the seed address of seed0
+    jmpi copy_seed_RG
+next_seed_RG:
+    addi t2, t2, 1          ; t2 += 1 : next line in the GSA
+    beq t2, t1, reset_game_suite
+copy_seed_RG:
+    addi a1, t2, 0          ; a1 = t2 : put the array number in reg a1
+    slli t4, t2, 2          ; t4 = t2 * 4 : sll by 2 of t2 to have a valid address
+    add t4, t4, t3          ; t4 = t4 + t3 : address of the t2-th seed of seed0
+    ldw a0, 0(t4)           ; a0 = MEM(t4) : put the retrieved seed in reg a0
+    call save_stack_reset_game
+    call set_gsa
+    call retrieve_stack_reset_game
+    jmpi next_seed_RG
+
+save_stack_reset_game:
+    addi sp, sp, -16       ; sp -= 16 : prepare for pushing 4 words  
+    stw t0, 12(sp)  
+    stw t1, 8(sp) 
+    stw t2, 4(sp)  
+    stw t3, 0(sp)
+    ret
+retrieve_stack_reset_game:
+    ldw t3, 0(sp)
+    ldw t2, 4(sp)
+    ldw t1, 8(sp)
+    ldw t0, 12(sp)
+    addi sp, sp, 16      ; sp == 16 : 4 words were popped
+    ret
+
+reset_game_suite:
+    call draw_gsa
+
     addi t0, zero, PAUSED
     stw t0, PAUSE(zero)         ;store isPaused in PAUSE
     addi t0, zero, MIN_SPEED
     stw t0, SPEED(zero)         ;set game speed to 0
 
+    ldw ra, 0(sp)
+    addi sp, sp, 4
     ret
 ; END:reset_game
