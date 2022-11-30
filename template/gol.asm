@@ -738,6 +738,7 @@ find_neighbours:
             ldw a0, 20(sp)
             ldw s3, 24(sp)
             ldw ra, 28(sp)
+            addi sp, sp, 32
 
             srl v0, v0, t1
             andi v0, v0, 1
@@ -764,6 +765,7 @@ find_neighbours:
     ldw a0, 4(sp)
     ldw s3, 8(sp)
     ldw ra, 12(sp)
+    addi sp, sp, 16
 
     srl t7, v0, a0                  ;examined cell in LSB
     andi t7, t7, 1                  ;mask rest of bits
