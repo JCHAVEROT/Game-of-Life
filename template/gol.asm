@@ -32,10 +32,10 @@ main:                   ; while (true)
     addi sp, zero, CUSTOM_VAR_END
     call reset_game
     call get_input
-    addi t0, v0, 0      ; t0 = 'e' variable
-    addi t1, zero, 0    ; t1 = 'done' variable
+    addi s0, v0, 0      ; t0 = 'e' variable
+    addi s1, zero, 0    ; t1 = 'done' variable
 game_loop:              ; while (!done)
-    addi a0, t0, 0
+    addi a0, s0, 0
     call select_action
     call update_state
     call update_gsa
@@ -43,10 +43,14 @@ game_loop:              ; while (!done)
     call draw_gsa
     call wait
     call decrement_step
-    addi t1, v0, 0
+    addi s1, v0, 0
+    addi sp, sp, -4
+    stw s1, 0(sp)
     call get_input
-    addi t0, v0, 0
-    beq t1, zero, game_loop
+    ldw s1, 0(sp)
+    addi sp, sp, 4
+    addi s0, v0, 0
+    beq s1, zero, game_loop
 beq zero, zero, main
 
 
@@ -323,8 +327,8 @@ generate_pixel:
     or t3, t3, t0             ; copy the generated pixel in the array
     jmpi next_pixel
 next_array:
-    addi a1, t1, 0               ; a0 = t1 : put the array number in reg a0
-    addi a0, t3, 0               ; a1 = t3 : put the generated array in reg a1
+    addi a1, t1, 0               ; a1 = t1 : put the array number in reg a1
+    addi a0, t3, 0               ; a0 = t3 : put the generated array in reg a0
     call save_stack_RG
     call set_gsa
     call retrieve_stack_RG
@@ -338,7 +342,7 @@ next_array:
     ret
 
 save_stack_RG:
-    addi sp, sp, -24       ; sp -= 32 : prepare for pushing eight words
+    addi sp, sp, -24       ; sp -= 24 : prepare for pushing 6 words
     stw t0, 20(sp) 
     stw t1, 16(sp)   
     stw t2, 12(sp) 
@@ -353,7 +357,7 @@ retrieve_stack_RG:
     ldw t2, 12(sp)
     ldw t1, 16(sp)
     ldw t0, 20(sp)
-    addi sp, sp, 24      ; sp == 32 : eight words were popped
+    addi sp, sp, 24      ; sp += 24 : 6 words were popped
     ret
 ; END:random_gsa
 
@@ -658,7 +662,7 @@ cell_fate:
     addi t0, zero, 3                ;put 3 in register t0
     addi t1, zero, 2                ;put 2 in register t1
     bne a1, zero, isAlive_CF        ;the cell is alive
-    bne a0, t0, exit_CF             ;check if population is equal to 3
+    bne a0, t0, cellDies_CF         ;check if population is equal to 3
     addi v0, zero, 1                ;cell was dead and has exactly 3 live neighbors, so becomes alive
     jmpi exit_CF
     isAlive_CF:
@@ -858,7 +862,7 @@ retrieve_stack_UG:
     ldw t2, 20(sp)
     ldw t1, 24(sp)
     ldw t0, 28(sp)
-    addi sp, sp, 32      ; sp == 32 : eight words were popped
+    addi sp, sp, 32      ; sp += 32 : eight words were popped
     ret
 
 retrieve_address:
@@ -1017,7 +1021,7 @@ retrieve_stack_reset_game:
     ldw t2, 4(sp)
     ldw t1, 8(sp)
     ldw t0, 12(sp)
-    addi sp, sp, 16      ; sp == 16 : 4 words were popped
+    addi sp, sp, 16      ; sp += 16 : 4 words were popped
     ret
 
 reset_game_suite:
