@@ -306,8 +306,8 @@ random_gsa:
     addi sp, sp, -4                 ; make space for the return address
     stw ra, 0(sp)                   ; put on the stack the return value
     ldw t0, GSA_ID(zero)            ; t0 = current GSA in use. Note: unused since choice of GSA delegated to set_gsa
-    addi t1, zero, 0                ; t1 = current array number
-    addi t2, zero, 0                ; t2 = current pixel number
+    addi t1, zero, 0                ; t1 = current array number (y)
+    addi t2, zero, 0                ; t2 = current pixel number (x)
     addi t3, zero, 0                ; t3 = the generated array 
     addi t4, zero, N_GSA_LINES      ; t4 = number of lines in a gsa
     addi t5, zero, N_GSA_COLUMNS    ; t5 = number of columns in a gsa  
@@ -323,8 +323,8 @@ generate_pixel:
     or t3, t3, t0             ; copy the generated pixel in the array
     jmpi next_pixel
 next_array:
-    addi a0, t1, 0               ; a0 = t1 : put the array number in reg a0
-    addi a1, t3, 0               ; a1 = t3 : put the generated array in reg a1
+    addi a1, t1, 0               ; a0 = t1 : put the array number in reg a0
+    addi a0, t3, 0               ; a1 = t3 : put the generated array in reg a1
     call save_stack_RG
     call set_gsa
     call retrieve_stack_RG
