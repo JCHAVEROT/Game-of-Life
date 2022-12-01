@@ -44,7 +44,7 @@ game_loop:              ; while (!done)
     call wait
     call decrement_step
     addi t1, v0, 0
-     addi sp, sp, -4
+    addi sp, sp, -4
     stw s1, 0(sp)
     call get_input
     ldw s1, 0(sp)
@@ -916,20 +916,18 @@ mask:
 get_input:
 	addi t0, zero, 4
 	ldw v0, BUTTONS(t0)
-	;xori v0, v0, 15				;inverse les 5 derniers
-	andi t1, v0, 15					;masque les 4 premiers bits
-	addi t2, t1, -1					;algorithme styley
+	andi t1, v0, 15					;mask first 4 bits
+	addi t2, t1, -1					;check if only one button is pressed
 	and t1, t1, t2
 	beq t1, zero, get_input_fin
-	;addi t2, zero, 5				;condition d'arret
-	addi t3, zero, 0				;compteur
+	addi t3, zero, 0				;iter
 	addi t5, zero, 1				;1
 get_input_loop:
 	srl t1, v0, t3
 	andi t1, t1, 1
 	beq t1, t5, get_input_exitloop
 	addi t3, t3, 1
-	br get_input_loop 				;condition d'arret normalement jamais atteinte...
+	br get_input_loop 
 get_input_exitloop:
 	sll v0, t5, t3
 get_input_fin:	
