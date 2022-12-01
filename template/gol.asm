@@ -1,4 +1,4 @@
-    ;;    game state memory location
+ ;;    game state memory location
     .equ CURR_STATE, 0x1000              ; current game state
     .equ GSA_ID, 0x1004                  ; gsa currently in use for drawing
     .equ PAUSE, 0x1008                   ; is the game paused or running
@@ -32,10 +32,10 @@ main:                   ; while (true)
     addi sp, zero, CUSTOM_VAR_END
     call reset_game
     call get_input
-    addi s0, v0, 0      ; t0 = 'e' variable
-    addi s1, zero, 0    ; t1 = 'done' variable
+    addi t0, v0, 0      ; t0 = 'e' variable
+    addi t1, zero, 0    ; t1 = 'done' variable
 game_loop:              ; while (!done)
-    addi a0, s0, 0
+    addi a0, t0, 0
     call select_action
     call update_state
     call update_gsa
@@ -43,14 +43,14 @@ game_loop:              ; while (!done)
     call draw_gsa
     call wait
     call decrement_step
-    addi s1, v0, 0
-    addi sp, sp, -4
+    addi t1, v0, 0
+     addi sp, sp, -4
     stw s1, 0(sp)
     call get_input
     ldw s1, 0(sp)
     addi sp, sp, 4
-    addi s0, v0, 0
-    beq s1, zero, game_loop
+    addi t0, v0, 0
+    beq t1, zero, game_loop
 beq zero, zero, main
 
 
@@ -342,7 +342,7 @@ next_array:
     ret
 
 save_stack_RG:
-    addi sp, sp, -24       ; sp -= 24 : prepare for pushing 6 words
+    addi sp, sp, -24       ; sp -= 32 : prepare for pushing eight words
     stw t0, 20(sp) 
     stw t1, 16(sp)   
     stw t2, 12(sp) 
@@ -357,7 +357,7 @@ retrieve_stack_RG:
     ldw t2, 12(sp)
     ldw t1, 16(sp)
     ldw t0, 20(sp)
-    addi sp, sp, 24      ; sp += 24 : 6 words were popped
+    addi sp, sp, 24      ; sp == 32 : eight words were popped
     ret
 ; END:random_gsa
 
@@ -742,7 +742,7 @@ find_neighbours:
             ldw a0, 20(sp)
             ldw s3, 24(sp)
             ldw ra, 28(sp)
-            addi sp, sp, 32
+			addi sp, sp, 32
 
             srl v0, v0, t1
             andi v0, v0, 1
@@ -769,7 +769,7 @@ find_neighbours:
     ldw a0, 4(sp)
     ldw s3, 8(sp)
     ldw ra, 12(sp)
-    addi sp, sp, 16
+	addi sp, sp, 16
 
     srl t7, v0, a0                  ;examined cell in LSB
     andi t7, t7, 1                  ;mask rest of bits
@@ -862,7 +862,7 @@ retrieve_stack_UG:
     ldw t2, 20(sp)
     ldw t1, 24(sp)
     ldw t0, 28(sp)
-    addi sp, sp, 32      ; sp += 32 : eight words were popped
+    addi sp, sp, 32      ; sp == 32 : eight words were popped
     ret
 
 retrieve_address:
@@ -914,23 +914,27 @@ mask:
 
 ; BEGIN:get_input
 get_input:
-    ldw v0, BUTTONS+4(zero)     ;fetch information from the edgecapture register
-    addi t0, zero, 0            ;iter
-    addi t1, zero, 5            ;t1=5 for break condition
-    loop_GI:
-        srl t2, v0, t0          ;shift the edgecapture by t0 amount
-        andi t2, t2, 1          ;keep the LSB
-        bne t2, zero, end_GI    ;exit when LSB of t2 is 1
-        addi t0, t0, 1          ;increment iter
-        bne t0, t1, loop_GI
-
-    end_GI:
-        srl v0, v0, t0          ;shift right to get the t0-th button in the LSB
-        andi v0, v0, 1          ;mask all the other bits
-        sll v0, v0, t0          ;shift back the bit to the right button
-    
-    stw zero, BUTTONS+4(zero)   ;store 0's in the edgecapture register        
-    ret
+	addi t0, zero, 4
+	ldw v0, BUTTONS(t0)
+	;xori v0, v0, 15				;inverse les 5 derniers
+	andi t1, v0, 15					;masque les 4 premiers bits
+	addi t2, t1, -1					;algorithme styley
+	and t1, t1, t2
+	beq t1, zero, get_input_fin
+	;addi t2, zero, 5				;condition d'arret
+	addi t3, zero, 0				;compteur
+	addi t5, zero, 1				;1
+get_input_loop:
+	srl t1, v0, t3
+	andi t1, t1, 1
+	beq t1, t5, get_input_exitloop
+	addi t3, t3, 1
+	br get_input_loop 				;condition d'arret normalement jamais atteinte...
+get_input_exitloop:
+	sll v0, t5, t3
+get_input_fin:	
+	stw zero, BUTTONS(t0)
+	ret
 ; END:get_input
 
 ; BEGIN:decrement_step
@@ -1021,7 +1025,7 @@ retrieve_stack_reset_game:
     ldw t2, 4(sp)
     ldw t1, 8(sp)
     ldw t0, 12(sp)
-    addi sp, sp, 16      ; sp += 16 : 4 words were popped
+    addi sp, sp, 16      ; sp == 16 : 4 words were popped
     ret
 
 reset_game_suite:
