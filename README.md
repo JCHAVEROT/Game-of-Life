@@ -1,7 +1,6 @@
 # Game of Life
 
-A Game of life in Assembly Language (NiosII). Inspired of the famous [Conway's Game of Life (1970)](https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life).
-
+A Game of life in Assembly Language (NiosII). Inspired of the famous [Conway's Game of Life](https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life) (1970).
 Lab 4 for the Course CS-208 at EPFL.
 
 
