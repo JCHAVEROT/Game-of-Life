@@ -2,7 +2,7 @@
 
 A Game of life in Assembly Language (NiosII). Inspired of the famous [Conway's Game of Life](https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life) (1970).
 
-Lab 4 for the Computer Architecture I ([CS-208](https://edu.epfl.ch/coursebook/fr/computer-architecture-i-CS-208)) course at EPFL.
+This game project was conducted within the framework of the Computer Architecture I ([CS-208](https://edu.epfl.ch/coursebook/fr/computer-architecture-i-CS-208)) course at EPFL.
 
 Game demo:
 
